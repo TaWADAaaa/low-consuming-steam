@@ -2,6 +2,18 @@
 
 **The combined 2 GiB / four-core target has not been demonstrated.** This protocol defines acceptance. The tool does not impose a hard memory limit, and a simpler style does not automatically reduce client-engine memory.
 
+## What changed in this revision
+
+The earlier Discord visual/preload patch was found installed during an uncontrolled desktop observation, with about 1 GiB of aggregate Discord working set. Steam was unpatched in that observation. The complete [diagnostic note](BASELINE.md) records the mixed installation state and measurement limits. It is not a before-and-after result.
+
+The new Discord policy acts before fetching recognized decorative CDN resources, requests smaller static recognized avatar/icon/emoji forms, suppresses image animation and disables spellcheck. The image policy also makes animated images in messages still. Its preload pauses eligible muted autoplay-loop decorative videos in the foreground as well as the background. Voice, streams, controlled video, authentication, API and attachment requests are not rewritten. These are feature tradeoffs, and their real-client effect still needs measurement.
+
+The new Steam policy enables existing native low bandwidth, low performance, disabled library community content and reduced motion paths through a supported settings getter, alongside CSS changes. The browser engine remains. Missing community library content or motion is an intended tradeoff.
+
+Chrome's new GUI profile affects installed Google Chrome 126 or later through four current-user performance policies. It enables native Maximum Memory Saver, disables background mode after the last window closes, and disables predictive page loading. Inactive tabs can reload more often and require more network traffic; there is no RAM cap or forced active-tab discard. The tool keeps Chrome open and does not read browser profiles or change security settings. Reload chrome://policy or restart normally when convenient. These policies may show Chrome's managed indicator, and existing local managed performance settings are preserved. The separate advanced Chromium source patch remains unchanged. [Native Maximum policy](https://chromium.googlesource.com/chromium/src/+/HEAD/components/policy/resources/templates/policy_definitions/Miscellaneous/MemorySaverModeSavings.yaml).
+
+The tool now supports cooperative Stop during work. That improves control over an operation, not the client engines' memory budget. Cancellation is checked during bounded work; an atomic file replacement or operating-system request must finish, and recovery cannot be canceled. No hard cancellation latency or freedom from client hangs is certified.
+
 ## Target
 
 Start with 2048 MiB available after Windows and ordinary background tasks. Allocate at most 1536 MiB of observed aggregate resident working set to the browser, Discord and Steam, leaving at least 512 MiB available. This does not describe a PC with only 2 GiB installed. Games, recording and other apps need their own budget.
@@ -52,6 +64,8 @@ Processes are grouped by name. Chrome includes chrome; Discord includes stable/P
 KnownWorkingSetMiB is resident memory including shared pages; summing processes can count shared pages more than once. Failed reads produce partial values. KnownPrivateCommitMiB is privately committed memory, not private resident RAM. **Do not add private commit to working set.** GPU memory, the game and other programs are outside the three-app sum. [Microsoft process memory counters](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex).
 
 CPU uses per-process CPU-time differences and actual elapsed intervals. The first baseline has no delta. New, ended or unreadable processes produce partial_lower_bound; processes created and ended between samples may be missed. Snapshots are not atomic. Time-weighted means can include partial intervals and do not certify a CPU bound with incomplete coverage.
+
+GPU utilization and memory need separate measurements. Record the same visible route, window size, scaling, animations and foreground/background state before and after. Task Manager reports a process's busiest GPU engine rather than a sum of engine percentages. Process-memory GPU counters can over-report on affected Windows systems; use the Performance pane or WPR/WPA to investigate. Integer zero readings in a brief sample do not prove zero activity. No GPU saving is established by this release. [Microsoft GPU display](https://devblogs.microsoft.com/directx/gpus-in-the-task-manager/) and [counter issue](https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/gpu-process-memory-counters-report-wrong-value).
 
 within_observed_working_set_budget means only that observed resident readings fit the threshold with required groups present and no failed memory reads. over_observed_working_set_budget means observed values already exceeded it. incomplete_observation prevents missing apps or unreadable values from passing. None certifies voice, latency, paging, GPU use or the complete project target.
 
