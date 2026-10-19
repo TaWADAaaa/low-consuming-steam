@@ -15,6 +15,8 @@ namespace Tawop.Tests
 
                 AssetStoreTests.Run();
                 Console.WriteLine("Standalone embedded asset checks passed.");
+                AutoSetupTests.Run(args[0]);
+                Console.WriteLine("Automatic detection, setup and recovery checks passed.");
                 AsarTests.Run();
                 Console.WriteLine("ASAR + Discord checks passed.");
                 SteamTests.Run();

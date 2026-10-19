@@ -16,6 +16,7 @@ namespace Tawop.Tests
             RejectCorruptIntegrity();
             RejectUnsafeMetadata();
             DiscordPreparationAndFusePreflight();
+            DiscordFuseLayoutValidation();
             Console.WriteLine("ASAR and Discord preparation: passed synthetic checks.");
         }
 
@@ -260,17 +261,93 @@ namespace Tawop.Tests
 
         private static byte[] FuseFixture(bool validationEnabled)
         {
+            return FuseFixture(65530, 1, Encoding.ASCII.GetBytes(validationEnabled ? "001010011" : "001000011"));
+        }
+
+        private static void DiscordFuseLayoutValidation()
+        {
+            string temporary = Path.Combine(Path.GetTempPath(), "Tawop-Fuse-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temporary);
+            try
+            {
+                string exe = Path.Combine(temporary, "Discord.exe");
+                byte[] disabled = Encoding.ASCII.GetBytes("001000011");
+                foreach (int start in new int[] { 2, 65506, 65507, 65530, 65537, 65538, 131070 })
+                {
+                    VerifyFuseFixture(exe, FuseFixture(start, 1, disabled), true, "A valid wire spanning or next to a scan boundary must pass");
+                }
+
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes("r01000011")), true, "Removed unrelated fuses are supported");
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes("00100")), true, "The minimum supported wire must pass");
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes(new string('0', 255))), true, "The one-byte wire length must be supported without an arbitrary limit");
+                VerifyFuseFixture(exe, FuseFixture(64, 2, disabled), false, "An unsupported wire version must fail");
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes("0010")), false, "A wire without the ASAR integrity fuse must fail");
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes("001010011")), false, "Enabled ASAR protection must fail");
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes("0010r0011")), false, "Removed ASAR protection is not an explicit disabled state");
+                VerifyFuseFixture(exe, FuseFixture(64, 1, Encoding.ASCII.GetBytes("x01000011")), false, "An unknown unrelated fuse state must fail");
+                byte[] inherited = (byte[])disabled.Clone();
+                inherited[0] = 0x90;
+                VerifyFuseFixture(exe, FuseFixture(64, 1, inherited), false, "An unresolved inherited fuse state is not a packaged fuse state");
+
+                byte[] truncated = FuseFixture(64, 1, disabled);
+                Array.Resize(ref truncated, truncated.Length - 1);
+                VerifyFuseFixture(exe, truncated, false, "A truncated fuse wire must fail");
+                Array.Resize(ref truncated, 64 + Encoding.ASCII.GetByteCount("dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX"));
+                VerifyFuseFixture(exe, truncated, false, "A missing fuse header must fail");
+
+                byte[] first = FuseFixture(64, 1, disabled);
+                byte[] second = FuseFixture(64, 1, Encoding.ASCII.GetBytes("001010011"));
+                byte[] duplicate = new byte[first.Length + second.Length];
+                Buffer.BlockCopy(first, 0, duplicate, 0, first.Length);
+                Buffer.BlockCopy(second, 0, duplicate, first.Length, second.Length);
+                VerifyFuseFixture(exe, duplicate, false, "A second Windows fuse wire must fail even when the first one is disabled");
+                VerifyFuseFixture(exe, Utf8.GetBytes("MZ synthetic Discord updater without Electron"), false, "An updater executable must not be accepted as the Electron application");
+            }
+            finally
+            {
+                string prefix = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                string target = Path.GetFullPath(temporary);
+                if (!target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(target).StartsWith("Tawop-Fuse-", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Refusing to remove a test directory outside its temporary root.");
+                }
+
+                if (Directory.Exists(target))
+                {
+                    Directory.Delete(target, true);
+                }
+            }
+        }
+
+        private static byte[] FuseFixture(int start, byte version, byte[] wire)
+        {
             byte[] sentinel = Encoding.ASCII.GetBytes("dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX");
-            byte[] bytes = new byte[70000 + sentinel.Length + 11];
+            byte[] bytes = new byte[start + sentinel.Length + 2 + wire.Length];
             bytes[0] = (byte)'M';
             bytes[1] = (byte)'Z';
-            int start = 65530;
             Buffer.BlockCopy(sentinel, 0, bytes, start, sentinel.Length);
-            bytes[start + sentinel.Length] = 1;
-            bytes[start + sentinel.Length + 1] = 9;
-            byte[] wire = Encoding.ASCII.GetBytes(validationEnabled ? "001010011" : "001000011");
+            bytes[start + sentinel.Length] = version;
+            bytes[start + sentinel.Length + 1] = (byte)wire.Length;
             Buffer.BlockCopy(wire, 0, bytes, start + sentinel.Length + 2, wire.Length);
             return bytes;
+        }
+
+        private static void VerifyFuseFixture(string exe, byte[] bytes, bool supported, string message)
+        {
+            File.WriteAllBytes(exe, bytes);
+            if (supported)
+            {
+                DiscordMod.VerifyElectronAsarIntegrity(exe);
+            }
+            else
+            {
+                MustReject(delegate
+                {
+                    DiscordMod.VerifyElectronAsarIntegrity(exe);
+                }, message);
+            }
+
+            AssertBytes(bytes, File.ReadAllBytes(exe), "Fuse verification must never modify an executable");
         }
 
         private static void VerifyIndependentHashes(byte[] archive)

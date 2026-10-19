@@ -62,7 +62,8 @@ namespace Tawop.Tests
             PatchInspection plan = ModCore.Inspect(Product.Steam, root, assets);
             Assert(plan.Files.Count == 2 && !Directory.Exists(Path.Combine(root, ".tawop")), "Inspection mutated fixture.");
             PatchInspection applied = ModCore.Apply(Product.Steam, root, assets);
-            Assert(applied.Status == "Aplicado" && ModCore.Hash(File.ReadAllBytes(Css(root, "library.css"))) != ModCore.Hash(library), "No actual CSS mutation.");
+            Assert(applied.Status == "Applied" && ModCore.Hash(File.ReadAllBytes(Css(root, "library.css"))) != ModCore.Hash(library), "No actual CSS mutation.");
+            Assert(ModCore.Inspect(Product.Steam, root, assets).Status == "Applied", "An active legacy-compatible journal must be displayed in English.");
             bool blocked = false;
             try
             {
@@ -75,7 +76,7 @@ namespace Tawop.Tests
 
             Assert(blocked, "Second apply overwrote original backup.");
             PatchInspection restored = ModCore.Restore(Product.Steam, root);
-            Assert(restored.Status == "Restaurado" && ModCore.Hash(File.ReadAllBytes(Css(root, "library.css"))) == ModCore.Hash(library) && ModCore.Hash(File.ReadAllBytes(Css(root, "sp.css"))) == ModCore.Hash(sp), "Original bytes were not restored.");
+            Assert(restored.Status == "Restored" && ModCore.Hash(File.ReadAllBytes(Css(root, "library.css"))) == ModCore.Hash(library) && ModCore.Hash(File.ReadAllBytes(Css(root, "sp.css"))) == ModCore.Hash(sp), "Original bytes were not restored.");
             Assert(!File.Exists(Path.Combine(root, @".tawop\steam.json")), "Restored journal stayed active.");
         }
 

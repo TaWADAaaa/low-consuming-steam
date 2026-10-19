@@ -30,7 +30,7 @@ namespace Tawop.Tests
                     ModCore.Restore(Product.Chrome, fixture.Root);
                 }, "Corrupt backup should fail.");
                 Assert(File.ReadAllText(fixture.Branding) == beforeBranding && File.ReadAllText(fixture.Prefs) == beforePrefs, "A corrupt backup must not change any target.");
-                Assert(applied.Status == "Aplicado", "Fixture should have applied before the corruption test.");
+                Assert(applied.Status == "Applied", "Fixture should have applied before the corruption test.");
             }
 
             using (Fixture fixture = new Fixture())
