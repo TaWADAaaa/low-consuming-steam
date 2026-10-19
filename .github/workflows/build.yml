@@ -1,0 +1,26 @@
+name: Build and test Low Consuming Steam
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Compile and test Steam patcher
+        shell: powershell
+        run: ./scripts/Build.ps1 -Product Steam
+      - name: Package sources and executable
+        shell: powershell
+        run: ./scripts/Package.ps1 -OutputPath "$env:RUNNER_TEMP/low-consuming-steam-v0.3.0-experimental.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: low-consuming-steam-Windows
+          path: ${{ runner.temp }}/low-consuming-steam-v0.3.0-experimental.zip
+          if-no-files-found: error
