@@ -1,86 +1,66 @@
-# Presupuesto de rendimiento
+# Performance budget
 
-**La meta de 2 GiB disponibles y cuatro núcleos todavía no está demostrada.** Esta guía fija cómo aceptarla o rechazarla. El kit no impone un límite duro de RAM ni hace que CSS reduzca automáticamente la memoria del motor.
+**The combined 2 GiB / four-core target has not been demonstrated.** This protocol defines acceptance. The tool does not impose a hard memory limit, and a simpler style does not automatically reduce client-engine memory.
 
-## Objetivo que se va a comprobar
+## Target
 
-Se parte de **2048 MiB libres para aplicaciones después de Windows y las tareas habituales**. Se asigna un máximo observado de **1536 MiB a Chrome/Chromium, Discord y Steam juntos**, con **512 MiB de margen**. El juego, grabación, overlays adicionales y otras apps deben entrar en un presupuesto propio; 512 MiB no garantizan que cualquier juego quepa. Una PC con 2 GiB instalados en total no es este objetivo.
+Start with 2048 MiB available after Windows and ordinary background tasks. Allocate at most 1536 MiB of observed aggregate resident working set to the browser, Discord and Steam, leaving at least 512 MiB available. This does not describe a PC with only 2 GiB installed. Games, recording and other apps need their own budget.
 
-Los umbrales CPU y respuesta de esta tabla son criterios del proyecto, pendientes de evaluación; no son resultados obtenidos ni especificaciones de los fabricantes.
+These are proposed acceptance criteria, not measured results or manufacturer specifications:
 
-| Criterio | Condición de aceptación propuesta |
+| Criterion | Proposed acceptance |
 |---|---|
-| RAM de las tres apps | Pico de working set agregado ≤1536 MiB en cada escenario y las tres apps observadas sin fallos de lectura. |
-| Margen real del sistema | ≥512 MiB disponibles durante la sesión final; registrar mínimo con un monitor del sistema. El recolector actual sólo registra inicio/final. |
-| CPU en reposo | Media conjunta ≤5% y percentil 95 ≤10% de la CPU total del equipo objetivo. |
-| CPU con chat, navegación y voz | Media conjunta ≤25% y percentil 95 ≤40% de la CPU total; excluir el juego de la suma de apps y medirlo aparte. |
-| Respuesta al interactuar | Percentil 95 ≤200 ms desde clic o tecla hasta respuesta visible, sin bloqueos >1 s durante las tareas repetidas. |
-| Desplazamiento de interfaz | En pantalla de 60 Hz, al menos 95% de cuadros ≤33,3 ms durante el recorrido fijo de chat/biblioteca. Registrar con traza; FPS promedio solo no alcanza. |
-| Voz | 30 minutos, sin desconexiones ni cortes perceptibles atribuibles al cliente en la prueba controlada. Registrar también pérdidas y jitter que muestre Discord. |
-| Juego con voz y apps abiertas | Comparar la misma escena: media de FPS y 1% low sin empeorar >5% frente al cliente original y sin cierres ni cortes nuevos. |
+| Three-app RAM | Peak aggregate working set <=1536 MiB in each scenario, with all required groups present and readable. |
+| System spare RAM | >=512 MiB throughout the final session; record the minimum using a system monitor. The included collector records system availability at start/end only. |
+| Idle CPU | Combined mean <=5% and p95 <=10% of the target machine's total CPU. |
+| Chat, browsing and voice CPU | Combined mean <=25% and p95 <=40%; measure the game separately. |
+| Interaction | p95 <=200 ms from input to visible response; no stall >1 s during repeated tasks. |
+| Scrolling | On 60 Hz, at least 95% of frames <=33.3 ms in a fixed chat/library route; record a trace, not only average FPS. |
+| Voice | Thirty minutes with no client-attributable disconnects or audible dropouts in a controlled test; record reported loss and jitter. |
+| Gaming | Fixed scene, average FPS and 1% low no worse by >5% versus original clients, without new crashes or audio problems. |
 
-Se registra el modelo exacto de CPU y si sus cuatro núcleos tienen cuatro u ocho procesadores lógicos. El valor `CpuPercentActualMachine` sirve para el equipo medido. `CpuPercentFourCoreEquivalent` divide tiempo CPU por cuatro de forma aritmética: no predice cómo rendirá otra CPU ni reemplaza hardware de cuatro núcleos.
+Record the exact CPU model, physical cores and logical processors. CpuPercentActualMachine describes the tested machine. CpuPercentFourCoreEquivalent divides observed CPU time by four as arithmetic; it does not predict another processor's performance.
 
-## Comparación reproducible
+## Repeatable comparison
 
-1. Registrar Windows, CPU, RAM instalada, GPU, disco, resolución, escala, driver y versiones exactas de clientes. Anotar extensiones, configuración y si hay caché caliente o fría.
-2. Conservar cuenta, páginas, servidor/canal, juego, volumen y ruta de prueba. Medir primero los clientes originales. No vaciar working sets ni desactivar servicios para forzar un número menor.
-3. Abrir las tres apps, esperar cinco minutos y medir reposo durante cinco minutos. Mantener todas presentes; no sustituir Discord escritorio por web en una comparación del mod de escritorio.
-4. Medir diez minutos de tareas activas: recorrido fijo por páginas y biblioteca, veinte cambios de canal y escritura de mensajes. Medir una llamada de treinta minutos, con las ventanas visibles y luego en segundo plano.
-5. Medir diez minutos de la misma escena de juego con llamada activa y las otras apps abiertas. Registrar juego, resolución, ajustes, herramienta de frametime y conectividad.
-6. Repetir después de aplicar los parches, con las mismas condiciones. Hacer tres repeticiones por variante y escenario, alternando el orden. Guardar CSV, JSON, trazas y observaciones de fallos; publicar también resultados desfavorables.
+1. Record Windows, CPU, installed RAM, GPU, storage, driver, resolution, scaling, client versions, extensions and warm/cold cache conditions.
+2. Keep account, pages, channel, game, audio volume and test route identical. Measure original clients first. Do not empty working sets or disable services to manufacture lower values.
+3. Open all three apps, wait five minutes and record five minutes idle with all apps present. Do not substitute web Discord for the desktop patch in a desktop comparison.
+4. Record ten minutes of fixed browsing/library tasks, twenty channel changes and typing. Test a thirty-minute voice call with windows visible and then in the background.
+5. Record ten minutes of the same game scene with the call and other apps open. Record game settings, frame-time tool and connectivity.
+6. Repeat after patching under the same conditions. Run three repetitions per variant/scenario, alternating order. Keep CSV, JSON, traces and failure observations; publish unfavorable results too.
 
-No limitar artificialmente la RAM de esta PC ni finalizar apps personales para fabricar un test. La aceptación final necesita una máquina/VM de prueba apropiada; una VM sirve para presión de memoria, pero las conclusiones de GPU, audio y FPS necesitan el hardware real correspondiente.
+Use dedicated test hardware or an appropriate VM. A VM can help study memory pressure, but GPU, audio and FPS conclusions require corresponding real hardware. Do not close personal apps or artificially constrain the development PC to manufacture acceptance.
 
-## Recolector incluido
+## Included collector
 
-Desde la raíz del kit, con las apps ya abiertas:
+With apps already open, run from the repository folder:
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Measure-AppBudget.ps1 -Scenario original-idle -DurationSeconds 300 -IntervalSeconds 1 -OutputDirectory .\results\original-idle-01
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Measure-AppBudget.ps1 -Scenario tawop-active -DurationSeconds 600 -IntervalSeconds 1 -OutputDirectory .\results\tawop-active-01
-```
+~~~powershell
+powershell.exe -NoProfile -File .\scripts\Measure-AppBudget.ps1 -Scenario original-idle -DurationSeconds 300 -IntervalSeconds 1 -OutputDirectory .\results\original-idle-01
+powershell.exe -NoProfile -File .\scripts\Measure-AppBudget.ps1 -Scenario modified-active -DurationSeconds 600 -IntervalSeconds 1 -OutputDirectory .\results\modified-active-01
+~~~
 
-Cada salida debe usar una carpeta nueva. `samples.csv` contiene filas por app y una fila `Total` por muestra; `summary.json` incluye hardware, pico, medias, cobertura y veredicto. El script sólo lee contadores de procesos y escribe mediciones. No cambia ajustes de Windows/apps ni lee títulos de ventanas, URLs, historial o líneas de comando. Los resultados pueden contener datos de hardware y versiones: revisalos antes de compartirlos.
+Each output folder must be new. samples.csv contains per-app rows and a Total row per sample; summary.json contains hardware, peaks, means, coverage and verdict. The collector reads counters and writes local results. It does not change Windows/client settings or read window titles, URLs, history or command lines. Review hardware details and paths before sharing.
 
-Parámetros: `DurationSeconds` (30 por defecto), `IntervalSeconds` (2), `BudgetMiB` (1536), `ReserveMiB` (512), `TargetAvailableMiB` (2048), `Scenario`, `OutputDirectory` y `DiscordMode` (`Desktop` por defecto). `Web` sólo declara un escenario elegido por el operador; el recolector no comprueba la presencia de una sesión de Discord web. Si Discord escritorio sigue abierto, también lo suma.
+Parameters include DurationSeconds (default30), IntervalSeconds (2), BudgetMiB (1536), ReserveMiB (512), TargetAvailableMiB (2048), Scenario, OutputDirectory and DiscordMode (Desktop). Web declares an operator-selected scenario; it does not verify a signed-in web session, and a running desktop Discord is still counted.
 
-Los grupos se identifican por nombre de proceso. Chrome incluye `chrome`; Discord incluye variantes Stable, PTB, Canary y Development; Steam incluye `steam`, `steamwebhelper`, `steamservice`, `GameOverlayUI` y sus reportadores de errores. No se valida ruta/firma del proceso. Un navegador renombrado fuera de esos nombres requiere ajustar y probar el recolector.
+Processes are grouped by name. Chrome includes chrome; Discord includes stable/PTB/Canary/Development; Steam includes steam, steamwebhelper, steamservice, GameOverlayUI and crash reporters. Names are not signature or path verification. Renamed browsers require collector changes and tests.
 
-## Cómo interpretar los números
+## Interpret results
 
-`KnownWorkingSetMiB` es RAM residente, incluidas páginas compartidas. La suma puede contar algunas páginas más de una vez; si falla una lectura, sólo se conocen valores parciales. `KnownPrivateCommitMiB` es memoria privada comprometida, no RAM privada residente: **no sumes commit y working set**. La memoria GPU, otros programas y el juego no forman parte de esta suma. [Microsoft: contadores de memoria de proceso](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex).
+KnownWorkingSetMiB is resident memory including shared pages; summing processes can count shared pages more than once. Failed reads produce partial values. KnownPrivateCommitMiB is privately committed memory, not private resident RAM. **Do not add private commit to working set.** GPU memory, the game and other programs are outside the three-app sum. [Microsoft process memory counters](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex).
 
-La CPU usa diferencias de tiempo de CPU por proceso entre capturas y el intervalo real transcurrido. El primer punto es `baseline` y no tiene delta. Un proceso nuevo, terminado o ilegible deja el intervalo como `partial_lower_bound`; procesos que nacen y terminan entre dos capturas pueden pasar inadvertidos. Las capturas no son atómicas. Las medias CPU se ponderan por tiempo e incluyen intervalos parciales, por lo que no certifican un límite si la cobertura es incompleta.
+CPU uses per-process CPU-time differences and actual elapsed intervals. The first baseline has no delta. New, ended or unreadable processes produce partial_lower_bound; processes created and ended between samples may be missed. Snapshots are not atomic. Time-weighted means can include partial intervals and do not certify a CPU bound with incomplete coverage.
 
-`within_observed_working_set_budget` sólo afirma que las lecturas residentes observadas estuvieron dentro del umbral, con todos los grupos requeridos presentes y sin lecturas de memoria fallidas. `over_observed_working_set_budget` demuestra que lo ya observado excedió el límite. `incomplete_observation` impide aprobar una sesión con apps ausentes o lecturas fallidas. Ninguno certifica voz, latencia, paginación, compatibilidad, rendimiento de GPU o cumplimiento del objetivo completo.
+within_observed_working_set_budget means only that observed resident readings fit the threshold with required groups present and no failed memory reads. over_observed_working_set_budget means observed values already exceeded it. incomplete_observation prevents missing apps or unreadable values from passing. None certifies voice, latency, paging, GPU use or the complete project target.
 
-## Legibilidad y uso con teclado
+## Readability and keyboard
 
-Para texto común se exige contraste ≥4,5:1; para texto grande ≥3:1. W3C considera grande aproximadamente 24 px normal o 18,67 px en negrita. Los colores se evalúan sin redondear contra el umbral; la tabla sólo redondea la presentación. [WCAG 2.2: contraste mínimo](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).
+Require at least4.5:1 contrast for ordinary text and3:1 for large text. Evaluate unrounded ratios; rounded displays are only presentation. [WCAG contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).
 
-Colores propios calculados con luminancia relativa sRGB y fórmula `(Lclaro + 0,05) / (Loscuro + 0,05)`:
+The declared Discord main text #e4f5eb over #111713 has16.058:1 contrast; Steam text over #101e17 has15.211:1. Secondary #c0d1c7 over #111713 has11.409:1. Focus #6affab over #101e17 has13.527:1. Node tests recalculate defined CSS combinations; the minimum declared Discord combination is6.39:1. These values do not inspect every inherited or remotely supplied client color.
 
-| Uso | Texto / fondo | Relación calculada |
-|---|---|---|
-| Texto principal Discord | `#e4f5eb` / `#111713` | 16,058:1 |
-| Texto en superficies Steam | `#e4f5eb` / `#101e17` | 15,211:1 |
-| Texto secundario | `#c0d1c7` / `#111713` | 11,409:1 |
-| Texto atenuado | `#adbbb2` / `#111713` | 9,109:1 |
-| Enlace Discord | `#86f2b5` / `#111713` | 13,308:1 |
-| Enlace Steam | `#7ce8a6` / `#080d0b` | 13,005:1 |
-| Texto blanco en marca Discord | `#ffffff` / `#237647` | 5,594:1 |
-| Texto de botones del kit | `#dff7e9` / `#253e31` | 10,275:1 |
-| Texto del kit | `#dff7e9` / `#111a17` | 15,726:1 |
+Check 100/150/200% scaling, small windows, high contrast, visible focus, tab order and Enter/Space activation. Never hide controls, connection state, messages, names or voice indicators for lower counters. Offscreen screenshots help find clipping but do not replace keyboard and screen-reader checks in real clients.
 
-El foco `#6affab` sobre `#101e17` alcanza 13,527:1; supera el mínimo 3:1 de indicadores relevantes frente al color adyacente. [WCAG 2.2: contraste no textual](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).
-
-`node tests/Preload.Tests.js` recalcula el contraste directamente desde los CSS: el mínimo de las combinaciones declaradas de texto/fondo Discord es 6,39:1, y en la superficie Steam es 15,21:1. También prueba texto blanco sobre las tres variantes de marca. Esta prueba detecta regresiones de las variables propias; no inspecciona todos los colores heredados del cliente.
-
-La revisión funcional debe comprobar 100%, 150% y 200% de escala/zoom, ventana de 580×450 y 900×730 para el kit, temas claro/oscuro admitidos, alto contraste, foco visible, orden Tab y activación Enter/Espacio. No se ocultan controles, estado de conexión, mensajes, nombres ni indicadores de voz para bajar números. Los colores de la paleta propia no certifican la accesibilidad completa del cliente ni su contenido remoto.
-
-La interfaz del kit usa Segoe UI de 10 pt y etiquetas descriptivas. Con alto contraste conserva los colores del sistema. Las capturas fuera de pantalla sirven para detectar cortes de texto y distribución, pero no sustituyen una prueba con teclado y lector de pantalla.
-
-## Estado de las evidencias
-
-Consultá [VALIDACION.md](VALIDACION.md) para separar pruebas del motor, inspecciones en memoria y pruebas reales pendientes. El tamaño de los EXE, reducir CSS o cambiar un logo no son pruebas de ahorro de RAM. Una interfaz transparente tampoco prueba que haya menos capas: las capas del compositor tienen coste de memoria. [Google: composición de capas](https://web.dev/articles/stick-to-compositor-only-properties-and-manage-layer-count).
+See [Validation](VALIDACION.md) for tested fixtures and outstanding product checks. EXE size, smaller CSS and changed logos are not measurements of RAM savings. Transparency also does not establish fewer compositor layers. [Layer memory costs](https://web.dev/articles/stick-to-compositor-only-properties-and-manage-layer-count).

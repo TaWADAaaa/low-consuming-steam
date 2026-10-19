@@ -1,74 +1,52 @@
-# Low Consuming Steam user guide
+# Beginner guide: Low Consuming Steam
 
-This release contains the `SteamTawop.exe` patching tool and original Tawop source code. It does not replace the original client engine. For Chrome, the executable patches Chromium source code and a complete native browser build remains outstanding.
+## Download and open
 
-## Before applying a patch
+Open the [release page](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.4.0-experimental), expand **Assets** and download **low-consuming-steam-v0.4.0-experimental.zip**. Right-click the ZIP, choose **Extract All**, and open the new folder. Double-click **SteamTawop.exe**. The individual EXE download also works by itself.
 
-Use a supported installation and keep a way to reinstall the original client. Finish updates and close the client through its tray menu. The tool does not terminate applications or calls. An unsupported or ambiguous format is rejected instead of being modified.
+You do not need to understand source code or run a command. Developer files are included so the tool can be reviewed and rebuilt. BUILD.cmd is for developers; it is not the app.
 
-Run the individual EXE, or extract the full package to inspect and customize its original assets. The GUI currently uses Spanish action names:
+The executable is unsigned. Windows may display a publisher or reputation message, and antivirus software can flag unknown files. A ZIP does not remove these checks. Keep Windows protection enabled. If you do not trust a download, stop and review the source or ask someone you trust to help. SHA256 checks establish file identity, not safety certification.
 
-| GUI text | Meaning |
+## Use the main button
+
+Save your work and finish any call, game, download or update first. For Discord or Steam, click **Optimize Discord** or **Optimize Steam**. The tool locates the installed client, checks its files, requests a normal shutdown, backs up originals and applies the changes. If it stays in the tray, choose Quit Discord or Exit Steam there and retry; the tool does not force-terminate it. It reopens the client if it was running. Keep the window open until it shows the result.
+
+For Chrome, the button is **Prepare Chromium sources**. It accepts a developer's existing Chromium source folder, checks supported source files and applies the source patch with a backup. It does not optimize installed Google Chrome, download Chromium or compile a browser. Native browser compilation is a separate developer task in [the Chromium guide](../README_CHROMIUM.md).
+
+If automatic detection needs help, click **Choose a different folder**. For Discord you may select the Discord parent folder or a supported app-VERSION folder. The parent can contain several versions; detection must select an unambiguous usable installation. For Steam choose the folder containing steam.exe. For Chromium choose its src folder.
+
+**Details** shows diagnostic information. You do not need to inspect a plan or use a second apply button for normal operation.
+
+## Go back to the original version
+
+Use **Undo changes**. The tool verifies its backups and the current files before restoring. Keep the hidden .tawop folder inside the application folder until undo completes; it contains the originals.
+
+If another tool or an updater changed a file, undo keeps that external change and leaves the backup available. It does not force an old file over a newer one. If a failure interrupts patching, automatic rollback is attempted; any unfinished recovery information is kept. Replacement is atomic for each file, not for the entire installation at once.
+
+## Common messages
+
+| Message or situation | What to do |
 |---|---|
-| Elegir carpeta | Select folder. |
-| Analizar archivos | Inspect files without modifying the client. |
-| Aplicar parches | Apply the reviewed changes with backups. |
-| Restaurar originales | Restore verified original files. |
+| Application not found | Install the official client first, or use Choose a different folder. Discord's usual parent is %LOCALAPPDATA%\Discord; other channels may have their own folders. |
+| Unsupported client or integrity format | This version cannot be patched safely by the current tool. Keep the original client and report the version with the error text. An unknown fuse format is not fixed by administrator permissions. |
+| Client cannot close | Save work, end calls/games and close the client through its tray menu. Try again when its updater has finished. |
+| Access denied | The selected folder needs Windows write permissions. Check that it is your intended installation. Administrator rights do not make an unsupported format compatible. |
+| An active backup already exists | Use Undo changes first. Do not delete the backup manually to bypass the check. |
+| A file changed | Finish or pause the update, keep the backup and try undo. Do not overwrite another tool's change. |
+| Assets folder incomplete | Extract the complete ZIP again, or place the standalone EXE alone in a new folder. |
+| Cached resource changed | The error identifies the resource version folder. Move that folder aside so the tool can recreate its own assets. Do not move client profiles. |
 
-For Discord, select a supported installed `Discord\app-VERSION` folder. For Steam, select the folder containing `steam.exe`. For Chrome, select `src` in a Chromium checkout, not the installed Google Chrome folder.
+## What to expect afterward
 
-## Inspect, apply and restore
+Text and controls should remain readable with less recognized decoration. Check messages, dialogs, keyboard navigation and the functions you use. For Discord check voice, microphone, screen sharing and media; for Steam check library, downloads and game launch.
 
-Inspect first and review every target path, size and SHA256 hash. Applying rechecks the inputs, saves originals and records a journal under `.tawop/` inside the target installation. Files are replaced individually; this is not an atomic transaction covering the whole application.
+CSS selectors change when clients update. Finish updates before applying, undo before updating when possible, and check a new version again. Functional testing with real clients remains necessary; automated fixtures cannot certify a voice call or game session.
 
-After applying, start the client normally. Check login, messages, keyboard navigation, text readability, dialogs and the features you use. For Discord, explicitly check microphone, voice, screen sharing and media. For Steam, check library, downloads, game launch and dialogs. These real client checks are not replaced by fixture tests.
+Memory savings are not guaranteed. The target is 2048 MiB available after Windows, assigning at most 1536 MiB to all three apps with 512 MiB spare. That target is unverified. A game needs its own memory budget. Read the [performance guide](RENDIMIENTO.md) before treating a memory counter as proof.
 
-To restore, close the client and use **Restaurar originales**. Keep `.tawop/` until restoration completes. If an update or another tool changed a file, restore preserves that external change and leaves the corresponding backup pending. Do not apply during an update. On failure, the engine attempts rollback and retains its journal when recovery cannot finish.
+## Privacy and help
 
-The EXE is unsigned. Source code and the build manifest support review; they do not certify compatibility or safety. Protected installation folders require the appropriate Windows write permissions.
+The tool has no account sign-in, token reader, telemetry or report uploader. Detection examines known installation locations and process executable paths. The original clients keep their normal network behavior. Logs and errors can contain local paths: remove usernames and other personal information before sharing. Do not upload profiles, cookies, credentials, complete client archives or .tawop backups.
 
-## Embedded assets and customization
-
-Every distributed EXE embeds `discord/tawop.css`, `discord/preload.js` and `steam/tawop.css`. If no external `assets/` folder exists next to it, the tool extracts these original resources to `%LOCALAPPDATA%\TawopModKit\assets\0.3.0-<hash>` and verifies their SHA256 hashes on reuse. This cache contains only kit assets, not client files or account profiles.
-
-A complete external `assets/` folder takes precedence. It must contain all three paths listed above. This supports customization without recompiling. Incomplete external folders are rejected rather than mixed with embedded assets. If generated cache content was changed, the tool stops without overwriting it and identifies the version folder that can be moved aside to regenerate it.
-
-Visual changes favor flat surfaces, readable text and visible focus. Specific decorative layers can be hidden; functional controls and indicators must remain. Hiding a resource or setting transparency does not prove a download, decoding or memory reduction. Original files remain on disk, and backups take additional space.
-
-## Build and tests
-
-The kit uses Windows Forms and the .NET Framework C# compiler. Use Windows 10/11, PowerShell 5.1 and .NET Framework 4.8. Full development tests need Node on PATH, although the distributed EXE does not depend on Node or Electron.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1 -Product Steam
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Measure.Tests.ps1
-node .\tests\Preload.Tests.js
-```
-
-The C# suite checks synthetic ASAR archives, patch preparation, backup/restore behavior and embedded asset extraction, reuse, concurrency and tampering. GUI previews are rendered offscreen. JavaScript tests simulate DOM/media behavior and check the declared palette. Collector tests check process grouping, budget boundaries, missing apps, sums and CPU calculations; their full run adds a brief read-only sample with local TEMP output.
-
-`Build.ps1 -Product Steam -SkipTests` compiles only this patching tool without running the suite. Passing fixtures does not prove that a real client starts correctly, saves memory or keeps a voice call stable. Source formatting uses explicit names and consistent layout; design commentary belongs in the guides rather than inside the code.
-
-Chromium requires a separately prepared source checkout and C++ toolchain. `Build-Chromium.ps1` does not download the checkout or install its prerequisites. Native browser compilation, startup and accessibility tests remain outstanding. Keep the revision, patches and all required third-party notices with any future derived browser release.
-
-## Measure resource use
-
-The project target is 2048 MiB available after Windows, with at most 1536 MiB observed aggregate resident memory for the three apps and 512 MiB spare. It does not describe a PC with only 2 GiB installed. A game and other applications need their own budget. **This target is not yet demonstrated.**
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Measure-AppBudget.ps1 -Scenario original-idle -DurationSeconds 300 -IntervalSeconds 1 -OutputDirectory .\results\original-idle-01
-```
-
-Measure original and modified clients using the same hardware, versions, account, pages, channels, game scene and settings. Wait five minutes after opening the apps, then sample five minutes idle, ten minutes active tasks, a thirty-minute voice call and a fixed gaming scene. Repeat each variant/scenario three times and report failures as well as improvements.
-
-Resident working set may count shared pages more than once. Private commit is different and must not be added to working set. CPU uses process CPU-time deltas; partial coverage can undercount. The collector groups processes by name and does not measure GPU use, voice interruptions, input latency or game frame times. Its four-core arithmetic field does not predict performance on another CPU.
-
-A within-budget verdict certifies only the observed working-set criterion with required groups present and readable. Real CPU, responsiveness, voice and gaming acceptance require the additional checks in the Spanish [performance protocol](RENDIMIENTO.md).
-
-## Privacy and reporting
-
-Kit code has no sign-in, token reader, telemetry or report uploader. Original clients retain their own network behavior. Reports can contain installation paths and hardware information. Review paths, usernames and screenshots before sharing. Do not attach account data, credentials, profiles, complete client archives or `.tawop/` backups.
-
-Report the kit/client version, selected action, error, expected result and a minimal reproducible case. A privacy audit documents inspected files and exclusions; it cannot promise an absolute absence of every secret or vulnerability. Read [Privacy](../PRIVACY.md) and [Donations](../DONATIONS.md) for the separate, intentionally public donation addresses.
-
-MIT covers original kit code and assets. It does not relicense Discord, Steam, Google Chrome or Chromium. No complete proprietary client is included in these sources.
+Reports should include the tool version, client version, action, exact error and expected result. See [Privacy](../PRIVACY.md). Optional public donation addresses are listed separately in [Donations](../DONATIONS.md).

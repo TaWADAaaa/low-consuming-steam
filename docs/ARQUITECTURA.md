@@ -1,70 +1,52 @@
-# Arquitectura de Low Consuming Steam
+# Architecture: Low Consuming Steam
 
-Low Consuming Steam v0.3.0 publica un parcheador: `SteamTawop.exe`. El código Tawop compartido contiene el motor local y módulos para Discord, Steam y Chromium; esta entrega selecciona sólo Steam al compilar. La interfaz usa Windows Forms de .NET Framework: no inicia un navegador adicional para mostrar el parcheador. Las secciones de otros módulos explican las fuentes comunes, no representan ejecutables adicionales incluidos.
+This repository builds one native Windows Forms patch tool, SteamTawop.exe. It includes shared source modules for Discord, Steam and Chromium, with Steam selected at compile time. The window does not launch another browser engine. Source uses explicit names and consistent formatting; design explanations live here instead of inline documentation comments.
 
-Las explicaciones de diseño viven en esta guía; las fuentes usan nombres explícitos y formato consistente, sin comentarios de documentación insertados en el código. Las directivas de compilación, como `#if` de C# y `#requires` de PowerShell, sí son necesarias para ejecutar correctamente el proyecto.
-
-## Mapa del proyecto
-
-| Archivo o carpeta | Responsabilidad |
+| File | Responsibility |
 |---|---|
-| [src/Program.cs](../src/Program.cs) | Ventana, selección de carpeta, CLI y presentación del plan. |
-| [src/ModCore.cs](../src/ModCore.cs) | Validación de rutas, plan, hashes, journal, reemplazo y restauración. |
-| [src/AssetStore.cs](../src/AssetStore.cs) | Recursos embebidos, preferencia de recursos externos y caché verificada. |
-| [src/AsarArchive.cs](../src/AsarArchive.cs) | Lectura, verificación y reconstrucción de archivos ASAR. |
-| [src/DiscordMod.cs](../src/DiscordMod.cs) | Reconocer el cliente admitido y preparar su modificación local. |
-| [src/SteamMod.cs](../src/SteamMod.cs) | Encontrar hojas de estilo admitidas y preparar el tema local. |
-| [src/ChromeMod.cs](../src/ChromeMod.cs) | Cambiar marca y valores iniciales de rendimiento en fuentes Chromium. |
-| [assets/](../assets/) | CSS, preload y marca gráfica propios. |
-| [scripts/](../scripts/) | Build del kit, empaquetado, build opcional Chromium y recolección de métricas. |
-| [tests/](../tests/) | Fixtures y pruebas del motor, formatos, restauración e interfaz. |
+| src/Program.cs | Simple English window, progress, result and command-line entry point. |
+| src/AutoSetup.cs | Installation detection and automatic close, patch and reopen workflow. |
+| src/ModCore.cs | Allowed paths, plans, hashes, journals, atomic file replacement and restoration. |
+| src/AssetStore.cs | Embedded original resources, complete external assets and verified cache. |
+| src/AsarArchive.cs | ASAR structure, integrity validation and reconstruction. |
+| src/DiscordMod.cs | Supported Discord recognition and CSS/preload patch preparation. |
+| src/SteamMod.cs | Supported frontend stylesheets and original CSS additions. |
+| src/ChromeMod.cs | Chromium branding and two memory-saving source defaults. |
+| scripts/ | Native patcher build, packaging, optional Chromium build and measurements. |
+| tests/ | Temporary format, recovery, workflow, resource and GUI fixtures. |
 
-## Ejecutable individual y recursos
+## Automatic operation
 
-Cada EXE incorpora los tres recursos propios `discord/tawop.css`, `discord/preload.js` y `steam/tawop.css`. `AssetStore` da prioridad a una carpeta `assets/` externa junto al ejecutable; si existe, exige los tres archivos para permitir personalización explícita sin mezclar versiones.
+The main action detects a known installation or resolves a manually selected parent folder. It prepares changes before closing the selected client. A compatibility failure stops before patching. Normal shutdown is requested only for processes inside the selected installation. A client that hides to its tray may require its Quit/Exit menu; processes are never force-terminated. Once closure is verified, the existing engine verifies originals, creates backups and writes changes. A client that was running is reopened. Undo uses the same root resolution and backup checks.
 
-Si no hay carpeta externa, extrae los recursos embebidos a `%LOCALAPPDATA%\TawopModKit\assets\0.3.0-<hash16>`. El nombre incluye un hash del conjunto y se comprueba SHA256 de cada archivo al extraer y al reutilizarlo. Un mutex coordina instancias concurrentes; las escrituras preparan un archivo temporal antes de moverlo. Se rechazan rutas enlazadas y recursos ausentes o fuera del límite admitido.
+Client closure can end calls or pause downloads, so the main screen asks the user to save work first. The workflow does not change client integrity fuses, read account tokens, disable Windows protection or install a service. Chromium is a source-only action and does not become an automatic browser build.
 
-La caché contiene sólo CSS/JavaScript propio del kit, no archivos de Discord, Steam, Chromium ni datos personales. Un archivo de caché alterado produce un error sin sobrescribirlo. El mensaje indica la carpeta de esa versión para moverla y permitir regeneración; editar `assets/` externa completa es la vía para personalizar los estilos.
+## Assets
 
-## Desde un análisis hasta un parche
+Every EXE embeds discord/tawop.css, discord/preload.js and steam/tawop.css. A complete external assets folder takes precedence for explicit customization. An incomplete folder is rejected rather than mixing versions.
 
-**Analizar archivos** lee la carpeta elegida y prepara las ediciones en memoria. El informe muestra archivos, tamaños y hashes anteriores/posteriores. Que se pueda preparar una edición no demuestra que el cliente vaya a arrancar después.
+Without external assets, resources are extracted under %LOCALAPPDATA%\TawopModKit\assets\0.4.0-<hash16>. SHA256 hashes are checked when creating and reusing them. A mutex coordinates concurrent preparation; temporary files are moved into place. Links, absent resources and files beyond the size limit are rejected. Modified cache files are preserved and reported, not overwritten.
 
-**Aplicar parches** exige revisar primero el análisis desde la ventana. El motor comprueba que los originales no hayan cambiado, conserva las copias exactas y guarda un journal en `.tawop/` dentro de esa instalación. Prepara cada reemplazo en el mismo directorio del archivo destino y lo sustituye por archivo. Una instalación completa no se modifica en una única transacción atómica.
+## Backups and recovery
 
-Si falla una parte, intenta restaurar los cambios ya escritos. Un bloqueo o cambio externo puede impedirlo; el journal conserva información para reintentar. **Restaurar originales** comprueba tanto el respaldo como los archivos actuales. Si una actualización ajena cambió un archivo, lo conserva y deja el respaldo pendiente. No borres `.tawop/` antes de resolverlo.
+Only allowlisted client paths can be edited. Original hashes are checked during planning and immediately before replacement. Exact originals and a schema-versioned journal are saved under .tawop inside the installation. Each replacement is atomic, but the whole client is not a single atomic transaction.
 
-Los parches requieren clientes cerrados y sin actualización en curso. El kit no finaliza procesos, no inicia sesión, no lee tokens y no instala servicios. La CLI comparte el mismo motor; sus opciones son `--inspect`, `--apply` y `--restore`.
+A failure triggers attempted rollback. A lock or external change can prevent completion; the journal remains for recovery. Undo verifies both backup bytes and current files. If an updater changed a target, that change is kept and the corresponding original remains pending. Historical schema-1 status strings remain stable for compatibility with v0.3 backups; they are internal journal values, not UI labels.
 
-## Discord
+## Client modules
 
-El módulo reconstruye los ASAR compatibles después de verificar estructura, rutas, offsets y hashes SHA256, incluidos bloques de integridad. Mantiene el contenido ajeno a los cambios. Inyecta CSS propio y añade un preload al flujo principal reconocido.
+Discord reconstructs supported ASAR files after verifying paths, offsets, payload and SHA256 blocks. Recognized CSS and main-process structure receive original styles and a preload. The client EXE and Electron integrity fuses are never patched. Unknown formats or enforced embedded ASAR integrity stop the operation.
 
-El EXE del cliente no se parchea. Si el fuse de validación de integridad ASAR embebida está activado o no se puede reconocer con certeza, el módulo rechaza la instalación. El formato puede cambiar entre versiones del cliente y requiere una nueva prueba antes de admitirse.
+The preload pauses only connected, muted, autoplay-loop video with finite positive duration, no controls and no srcObject while hidden. It attempts to resume the same still-eligible source on return. Events and WeakMap avoid polling and retaining detached elements. It does not replace authentication, voice, message protocols or Electron.
 
-El preload se limita a la presentación y al control de multimedia decorativa identificado. Pausa únicamente videos conectados con autoplay, loop, mute, duración finita positiva, sin controles ni `srcObject` cuando la ventana está oculta. Al mostrarla intenta reanudar el mismo recurso si sigue cumpliendo esos filtros. Usa eventos y `WeakMap`, sin polling ni observador global de mutaciones. No sustituye autenticación, voz, protocolo de mensajes ni motor Electron. Las pruebas sintéticas no certifican esas funciones; se evalúan con el [protocolo funcional](RENDIMIENTO.md).
+Steam appends original CSS to supported frontend sheets and keeps exact original bytes. Specific decorative blurred copies and shadow effects are reduced while functional loading indicators remain. Backend, DRM, downloads and game executables are outside the patch targets. Class selectors may change after updates.
 
-Se ocultan `.avatarDecoration__44b0c`, `.avatarDecoration_c19a55`, `.profileEffects__0dd08` y clases concretas de destellos. No se oculta el avatar base ni se desactivan globalmente animaciones de carga/voz. Los selectores se contrastaron con hojas CSS públicas de Discord; son nombres de implementación, no una API estable.
+Chromium accepts a source checkout, changes four branding values and two memory-saving defaults, and preserves unrelated fields and encoding. Existing profile preferences and managed policies still prevail in a future build. Installed Google Chrome is not accepted. See [Chromium build](../README_CHROMIUM.md).
 
-## Steam
+## Visual and performance limits
 
-Se añaden reglas CSS propias a hojas del frontend admitidas. Se conservan los bytes anteriores en el respaldo y el motor del cliente sigue siendo el original. El parche no incorpora archivos de Steam al repositorio ni cambia el backend, DRM, descargas o ejecutables de juegos.
+Flat surfaces, fewer shadows, visible focus and recognized decorative-layer removal simplify drawing. Hiding an asset does not guarantee avoided network requests, decoding or resident memory. Transparency can still require compositing. Original assets stay on disk; backups add disk use. See [Chrome rendering](https://developer.chrome.com/blog/inside-browser-part3) and [layer costs](https://web.dev/articles/stick-to-compositor-only-properties-and-manage-layer-count).
 
-Se ocultan `.OpenGraphImgBackground`, copias `.productImage.productImageBlur` dentro de invitaciones concretas y `.Throbber_Blur`; permanece el indicador de carga funcional. Se verificaron esas estructuras en CSS del frontend changelist 11123049. Los selectores de clases pueden dejar de coincidir cuando Steam cambia su interfaz. Una regla visual que ya no coincide puede dejar de ahorrar dibujo sin que fallen los tests sintéticos. La biblioteca, los menús, las descargas y los diálogos deben comprobarse tras una actualización.
+Passing fixtures proves tested invariants, not client compatibility or a RAM saving. The combined 2 GiB / four-core target remains unverified. [Performance protocol](RENDIMIENTO.md).
 
-## Chromium
-
-`ChromeTawop.exe` recibe un checkout de Chromium, no una instalación de Google Chrome. Cambia dos archivos: `BRANDING` y el registro de dos preferencias de ahorro de memoria. No genera por sí solo un navegador. El build nativo y su validación están descritos en [README_CHROMIUM.md](../README_CHROMIUM.md).
-
-## Qué implica simplificar assets
-
-Ocultar decoración reduce su participación en el dibujo, pero no equivale a eliminar las funciones que la originan ni a borrar su coste del motor. `display: none` quita un elemento del árbol de layout; `content-visibility` permite omitir trabajo de renderizado bajo sus condiciones. [Chrome: pipeline de renderizado](https://developer.chrome.com/blog/inside-browser-part3), [Google: content-visibility](https://web.dev/articles/content-visibility).
-
-Una imagen ya solicitada o un recurso cargado por JavaScript puede seguir ocupando memoria aunque se oculte. Para impedir una descarga hay que controlar cómo se crea o carga el recurso; la política `loading="lazy"` es distinta de ocultar con CSS. Tawop no promete ahorro de red sólo por aplicar un estilo. [Google: carga de imágenes](https://web.dev/articles/browser-level-image-lazy-loading).
-
-Transparencia tampoco equivale a menos trabajo. El compositor une las capas visibles y las capas adicionales consumen memoria. Por eso Tawop prioriza superficies simples, pocos efectos y ausencia de blur decorativo; cualquier transparencia se reserva a decoración donde no afecte lectura. El resultado de rendimiento debe medirse en el cliente real. [Google: composición y memoria de capas](https://web.dev/articles/stick-to-compositor-only-properties-and-manage-layer-count).
-
-## Alcance del código abierto
-
-MIT cubre el código, estilos, pruebas, herramientas y marca Tawop publicados aquí. Los clientes Discord y Steam siguen siendo software de terceros y sus motores no forman parte de este repositorio. Chromium tiene su propia licencia y avisos. Consultá [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) antes de distribuir una build derivada.
+MIT covers original project code and assets. It does not relicense third-party clients or include their complete engines. [Third-party notices](../THIRD_PARTY_NOTICES.md).
