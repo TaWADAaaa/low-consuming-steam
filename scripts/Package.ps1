@@ -20,7 +20,7 @@ function Assert-PlainPath([string]$Path) {
 
 Assert-PlainPath $packageRoot
 if (-not $OutputPath) {
-    $OutputPath = Join-Path (Split-Path $packageRoot -Parent) ($repository + '-v0.5.0-experimental.zip')
+    $OutputPath = Join-Path (Split-Path $packageRoot -Parent) ($repository + '-v0.5.1-experimental.zip')
 }
 $output = [IO.Path]::GetFullPath($OutputPath)
 Assert-PlainPath $output
@@ -32,7 +32,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw 'Run BUILD.cmd or scripts/Build.ps1 for this repository product first.'
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.Version -ne '0.5.0' -or $manifest.SelectedProduct -ne $product -or
+if ($manifest.Version -ne '0.5.1' -or $manifest.SelectedProduct -ne $product -or
     @($manifest.Executables).Count -ne 1 -or $manifest.Executables[0].Name -ne $executable) {
     throw 'The manifest must contain only this project executable.'
 }

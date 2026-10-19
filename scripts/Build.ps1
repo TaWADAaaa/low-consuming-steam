@@ -88,7 +88,7 @@ $records = foreach ($app in $products) {
     [pscustomobject]@{Name=[IO.Path]::GetFileName($path);Bytes=(Get-Item -LiteralPath $path).Length;SHA256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash;Kind='local patch tool; not a replacement client'}
 }
 [pscustomobject]@{
-    Version = '0.5.0'
+    Version = '0.5.1'
     SelectedProduct = $selectedProduct
     BuiltUtc = [DateTime]::UtcNow.ToString('o')
     Compiler = (Get-Item -LiteralPath $compiler).VersionInfo.FileVersion
