@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 
 function Require-Tool([string]$Name) {
     $tool = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $tool) { throw "Falta $Name en PATH. Prepara depot_tools siguiendo README_CHROMIUM.md." }
+    if (-not $tool) { throw "$Name is missing from PATH. Prepare depot_tools using README_CHROMIUM.md." }
     return $tool.Source
 }
 
@@ -27,7 +27,7 @@ function Assert-NoReparse([string]$Path, [string]$Root) {
     $cursor = Get-Item -LiteralPath $Path -Force
     while ($cursor -and (Is-Within $cursor.FullName $Root)) {
         if (($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "Se rechazo un enlace o reparse point del paquete: $($cursor.FullName)"
+            throw "A package link or reparse point was rejected: $($cursor.FullName)"
         }
         if ($cursor.FullName.Equals($Root, [StringComparison]::OrdinalIgnoreCase)) { break }
         if ($cursor.PSIsContainer) { $cursor = $cursor.Parent }
@@ -35,51 +35,51 @@ function Assert-NoReparse([string]$Path, [string]$Root) {
     }
 }
 
-if ($env:OS -ne 'Windows_NT') { throw 'Este script compila Chromium para Windows x64.' }
+if ($env:OS -ne 'Windows_NT') { throw 'This script builds Chromium for Windows x64.' }
 $src = (Resolve-Path -LiteralPath $SourcePath).Path.TrimEnd('\', '/')
-if ($src -match '\s') { throw 'El checkout de Chromium requiere una ruta sin espacios, por ejemplo C:\src\chromium\src.' }
+if ($src -match '\s') { throw 'Chromium requires a checkout path without spaces, such as C:\src\chromium\src.' }
 $brandingFile = Join-Path $src 'chrome\app\theme\chromium\BRANDING'
 $prefsFile = Join-Path $src 'components\performance_manager\user_tuning\prefs.cc'
 foreach ($path in @((Join-Path $src '.gn'), $brandingFile, $prefsFile)) {
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "No parece un checkout Chromium completo: falta $path" }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "This is not a complete Chromium checkout. Missing: $path" }
 }
 $branding = [IO.File]::ReadAllText($brandingFile)
 $prefs = [IO.File]::ReadAllText($prefsFile)
 foreach ($key in @('PRODUCT_FULLNAME', 'PRODUCT_SHORTNAME', 'PRODUCT_INSTALLER_FULLNAME', 'PRODUCT_INSTALLER_SHORTNAME')) {
     $expected = if ($key -like '*INSTALLER*') { 'ChromeTawop Installer' } else { 'ChromeTawop' }
     if ([regex]::Matches($branding, "(?m)^$key=$([regex]::Escape($expected))\r?$").Count -ne 1) {
-        throw 'Aplica primero el parche de fuentes con ChromeTawop.exe.'
+        throw 'Apply the source patch with ChromeTawop.exe first.'
     }
 }
 if ([regex]::Matches($prefs, 'kMemorySaverModeState\s*,\s*static_cast<int>\(MemorySaverModeState::kEnabled\)').Count -ne 1 -or
     [regex]::Matches($prefs, 'kMemorySaverModeAggressiveness\s*,\s*static_cast<int>\(MemorySaverModeAggressiveness::kAggressive\)').Count -ne 1) {
-    throw 'El parche de ahorro de memoria esta ausente o no coincide con Tawop v3.'
+    throw 'The memory-saving patch is missing or does not match the current patch format.'
 }
 
 $git = Require-Tool 'git'
 $gitRootOutput = @(& $git -C $src rev-parse --show-toplevel)
-if ($LASTEXITCODE -ne 0 -or $gitRootOutput.Count -ne 1) { throw 'No se pudo verificar la raiz Git de Chromium.' }
+if ($LASTEXITCODE -ne 0 -or $gitRootOutput.Count -ne 1) { throw 'Could not verify the Chromium Git root.' }
 $gitRoot = [IO.Path]::GetFullPath($gitRootOutput[0]).TrimEnd('\', '/')
-if (-not $gitRoot.Equals($src, [StringComparison]::OrdinalIgnoreCase)) { throw 'SourcePath debe ser la raiz Git src de Chromium.' }
+if (-not $gitRoot.Equals($src, [StringComparison]::OrdinalIgnoreCase)) { throw 'SourcePath must be the Chromium src Git root.' }
 $revisionOutput = @(& $git -C $src rev-parse HEAD)
 if ($LASTEXITCODE -ne 0 -or $revisionOutput.Count -ne 1 -or $revisionOutput[0] -notmatch '^[a-fA-F0-9]{40}$') {
-    throw 'No se pudo obtener una revision Git valida.'
+    throw 'Could not read a valid Git revision.'
 }
 $revision = $revisionOutput[0]
 $gn = Require-Tool 'gn'
 $autoninja = Require-Tool 'autoninja'
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw 'Falta Visual Studio 2026 con herramientas C++ (vswhere no encontrado).' }
+if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw 'Visual Studio 2026 C++ tools are required; vswhere was not found.' }
 $vsPaths = @(& $vswhere -products '*' -version '[18.0,19.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.ATLMFC -property installationPath)
-if ($LASTEXITCODE -ne 0 -or $vsPaths.Count -eq 0) { throw 'Se requiere Visual Studio 2026 >=18.0 con C++ x64 y ATL/MFC.' }
+if ($LASTEXITCODE -ne 0 -or $vsPaths.Count -eq 0) { throw 'Visual Studio 2026 >=18.0 with C++ x64 and ATL/MFC is required.' }
 $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
 $sdkInclude = Join-Path $sdkRoot 'Include\10.0.28000.2270\um\Windows.h'
-if (-not (Test-Path -LiteralPath $sdkInclude -PathType Leaf)) { throw 'Falta Windows 11 SDK 10.0.28000.2270, requerido por el baseline inspeccionado.' }
+if (-not (Test-Path -LiteralPath $sdkInclude -PathType Leaf)) { throw 'Windows 11 SDK 10.0.28000.2270 is required by the inspected source baseline.' }
 $debugHelp = Join-Path $sdkRoot 'Debuggers\x64\dbghelp.dll'
-if (-not (Test-Path -LiteralPath $debugHelp -PathType Leaf)) { throw 'Faltan SDK Debugging Tools x64.' }
+if (-not (Test-Path -LiteralPath $debugHelp -PathType Leaf)) { throw 'SDK Debugging Tools x64 are missing.' }
 $debugVersion = (Get-Item -LiteralPath $debugHelp).VersionInfo
 $debugNumeric = [version]::new($debugVersion.FileMajorPart, $debugVersion.FileMinorPart, $debugVersion.FileBuildPart, $debugVersion.FilePrivatePart)
-if ($debugNumeric -lt [version]'10.0.26100.3323') { throw 'Se requieren SDK Debugging Tools >=10.0.26100.3323.' }
+if ($debugNumeric -lt [version]'10.0.26100.3323') { throw 'SDK Debugging Tools >=10.0.26100.3323 are required.' }
 
 $out = Join-Path $src 'out\TawopBrowser'
 $argsText = @'
@@ -97,15 +97,15 @@ $argsText = $argsText.Trim() + "`n"
 $argsFile = Join-Path $out 'args.gn'
 if (Test-Path -LiteralPath $argsFile) {
     if ([IO.File]::ReadAllText($argsFile).Replace("`r`n", "`n") -ne $argsText) {
-        throw 'out\TawopBrowser\args.gn contiene otra configuracion. Se conserva; usa otro checkout o resuelve esa diferencia manualmente.'
+        throw 'out\TawopBrowser\args.gn contains different settings. It was preserved. Use another checkout or resolve the difference manually.'
     }
 }
 if (-not $PackagePath) {
     $PackagePath = Join-Path (Split-Path -Parent $src) ('ChromeTawop-native-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 }
 $package = [IO.Path]::GetFullPath($PackagePath)
-if ((Is-Within $package $src) -or (Is-Within $src $package)) { throw 'El paquete debe estar fuera del checkout y no puede ser su directorio padre.' }
-if (Test-Path -LiteralPath $package) { throw 'PackagePath ya existe. El script no sobrescribe paquetes.' }
+if ((Is-Within $package $src) -or (Is-Within $src $package)) { throw 'The package must be outside the checkout and cannot be its parent folder.' }
+if (Test-Path -LiteralPath $package) { throw 'PackagePath already exists. This script does not overwrite packages.' }
 
 [PSCustomObject]@{
     SourcePath = $src
@@ -130,24 +130,24 @@ try {
     Push-Location -LiteralPath $src
     try {
         & $gn gen 'out\TawopBrowser'
-        if ($LASTEXITCODE -ne 0) { throw "gn gen fallo con codigo $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) { throw "gn gen failed with exit code $LASTEXITCODE." }
         & $autoninja -C 'out\TawopBrowser' chrome
-        if ($LASTEXITCODE -ne 0) { throw "La compilacion de Chromium fallo con codigo $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) { throw "Chromium compilation failed with exit code $LASTEXITCODE." }
         $runtimeDeps = @(& $gn desc 'out\TawopBrowser' '//chrome:chrome' runtime_deps)
-        if ($LASTEXITCODE -ne 0 -or $runtimeDeps.Count -eq 0) { throw 'GN no pudo calcular las dependencias de ejecucion. El build se conserva sin empaquetar.' }
+        if ($LASTEXITCODE -ne 0 -or $runtimeDeps.Count -eq 0) { throw 'GN could not calculate runtime dependencies. The build was kept without packaging.' }
     }
     finally { Pop-Location }
 
     $exe = Join-Path $out 'chrome.exe'
-    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'El compilador termino sin generar chrome.exe.' }
+    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Compilation finished without producing chrome.exe.' }
     $files = @{}
     foreach ($relative in $runtimeDeps) {
         $relative = $relative.Trim()
         if (-not $relative) { continue }
-        if ([IO.Path]::IsPathRooted($relative)) { throw "GN devolvio una ruta absoluta inesperada: $relative" }
+        if ([IO.Path]::IsPathRooted($relative)) { throw "GN returned an unexpected absolute path: $relative" }
         $itemPath = [IO.Path]::GetFullPath((Join-Path $out $relative))
-        if (-not (Is-Within $itemPath $out)) { throw "GN requiere un archivo externo al build: $relative. Se conserva el build; revisa el empaquetado." }
-        if (-not (Test-Path -LiteralPath $itemPath)) { throw "Falta una dependencia generada: $relative" }
+        if (-not (Is-Within $itemPath $out)) { throw "GN requires a file outside the build: $relative. The build was preserved; review its packaging." }
+        if (-not (Test-Path -LiteralPath $itemPath)) { throw "A generated dependency is missing: $relative" }
         Assert-NoReparse $itemPath $out
         $item = Get-Item -LiteralPath $itemPath -Force
         if ($item.PSIsContainer) {
@@ -163,7 +163,7 @@ try {
     foreach ($file in @($files.Keys | Sort-Object)) {
         $relative = $file.Substring($out.TrimEnd('\').Length + 1)
         $target = Join-Path $package $relative
-        if (-not (Is-Within $target $package)) { throw 'Se rechazo una ruta de destino inesperada.' }
+        if (-not (Is-Within $target $package)) { throw 'An unexpected destination path was rejected.' }
         [void][IO.Directory]::CreateDirectory((Split-Path -Parent $target))
         Copy-Item -LiteralPath $file -Destination $target
     }
@@ -178,11 +178,11 @@ try {
         native_build_completed = $true
         runtime_smoke_test_passed = $false
         memory_target_verified = $false
-        note = 'Build nativo de Chromium modificado. Validar inicio, navegacion, avisos de terceros y rendimiento antes de distribuir.'
+        note = 'Native modified Chromium build. Validate startup, navigation, third-party notices and performance before distributing.'
     } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
-    Write-Host "Build nativo generado: $exe"
-    Write-Host "Candidato portable: $package"
-    Write-Host 'El ejecutable interno conserva chrome.exe. El inicio del navegador y el objetivo de 2 GB requieren pruebas.'
+    Write-Host "Native build created: $exe"
+    Write-Host "Portable candidate: $package"
+    Write-Host 'The internal executable remains chrome.exe. Browser startup and the 2 GB target still require testing.'
 }
 finally {
     $env:DEPOT_TOOLS_WIN_TOOLCHAIN = $previousWinToolchain

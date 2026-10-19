@@ -11,7 +11,7 @@ $products = @('Discord', 'Steam', 'Chrome' | Where-Object { $Product -eq 'All' -
 $selectedProduct = if ($products.Count -eq 3) { 'All' } else { $products[0] }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $compiler)) { $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
-if (-not (Test-Path -LiteralPath $compiler)) { throw 'Falta el compilador .NET Framework C#. Usa Windows 10/11 con .NET Framework 4.8.' }
+if (-not (Test-Path -LiteralPath $compiler)) { throw 'The .NET Framework C# compiler is missing. Use Windows 10/11 with .NET Framework 4.8.' }
 $artifacts = Join-Path $packageRoot 'artifacts'
 New-Item -Path $artifacts -ItemType Directory -Force | Out-Null
 
@@ -52,33 +52,33 @@ foreach ($app in $products) {
     $output = Join-Path $packageRoot ($app + 'Tawop.exe')
     $arguments = $common + $resources + @('/target:winexe',('/define:' + $app.ToUpperInvariant()),('/out:' + $output),('/win32icon:' + $iconPath),('/win32manifest:' + (Join-Path $packageRoot 'src\app.manifest'))) + $sources
     & $compiler @arguments
-    if ($LASTEXITCODE -ne 0) { throw "No se pudo compilar $app" }
-    Write-Output "Compilado: $output"
+    if ($LASTEXITCODE -ne 0) { throw "Could not compile $app" }
+    Write-Output "Built: $output"
 }
 if (-not $SkipTests) {
     $testSources = @(Get-ChildItem -LiteralPath (Join-Path $packageRoot 'tests') -Filter '*.cs' -File | Where-Object Name -ne 'GuiSmoke.cs' | Sort-Object Name | ForEach-Object FullName)
     $coreSources = @($sources | Where-Object { [IO.Path]::GetFileName($_) -ne 'Program.cs' })
     $testExe = Join-Path $artifacts 'Tawop.Tests.exe'
     & $compiler @common @resources '/target:exe' '/main:Tawop.Tests.Runner' ('/out:' + $testExe) @coreSources @testSources
-    if ($LASTEXITCODE -ne 0) { throw 'No se pudieron compilar las pruebas.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the tests.' }
     & $testExe $packageRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Fallaron las pruebas.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
     $guiTest = Join-Path $artifacts 'GuiSmoke.exe'
     & $compiler @common '/target:exe' ('/out:' + $guiTest) (Join-Path $packageRoot 'tests\GuiSmoke.cs')
-    if ($LASTEXITCODE -ne 0) { throw 'No se pudo compilar la prueba de interfaz.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the interface test.' }
     foreach ($app in $products) {
         & $guiTest (Join-Path $packageRoot ($app + 'Tawop.exe')) (Join-Path $artifacts ($app + '-preview.png'))
-        if ($LASTEXITCODE -ne 0) { throw "Falló la prueba de interfaz $app" }
+        if ($LASTEXITCODE -ne 0) { throw "Interface test failed for $app" }
     }
     $node = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $node) { throw 'La validacion completa del preload necesita Node.js en PATH. Los ejecutables no necesitan Node para funcionar.' }
+    if (-not $node) { throw 'Full preload validation requires Node.js on PATH. The release executables do not require Node.' }
     & $node.Source (Join-Path $packageRoot 'tests\Preload.Tests.js') $packageRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Fallo la prueba de medios y estilos del preload.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Preload media and style tests failed.' }
     $measurementTest = Join-Path $packageRoot 'tests\Measure.Tests.ps1'
     if (Test-Path -LiteralPath $measurementTest) {
         $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
         & $windowsPowerShell -NoProfile -File $measurementTest -SkipIntegration
-        if ($LASTEXITCODE -ne 0) { throw 'Fallo la prueba del recolector de rendimiento.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Performance collector tests failed.' }
     }
 }
 $records = foreach ($app in $products) {
@@ -86,7 +86,7 @@ $records = foreach ($app in $products) {
     [pscustomobject]@{Name=[IO.Path]::GetFileName($path);Bytes=(Get-Item -LiteralPath $path).Length;SHA256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash;Kind='local patch tool; not a replacement client'}
 }
 [pscustomobject]@{
-    Version = '0.3.0'
+    Version = '0.4.0'
     SelectedProduct = $selectedProduct
     BuiltUtc = [DateTime]::UtcNow.ToString('o')
     Compiler = (Get-Item -LiteralPath $compiler).VersionInfo.FileVersion
@@ -95,4 +95,4 @@ $records = foreach ($app in $products) {
     MemoryTargetVerified = $false
     AutomatedTestsPassed = (-not $SkipTests)
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $packageRoot 'BUILD-MANIFEST.json') -Encoding UTF8
-Write-Output 'Build y comprobaciones terminados. Los ejecutables son modificadores locales.'
+Write-Output 'Build and checks completed. These executables are local patch tools.'

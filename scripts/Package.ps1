@@ -12,7 +12,7 @@ function Assert-PlainPath([string]$Path) {
     while ($current) {
         if (([IO.File]::Exists($current) -or [IO.Directory]::Exists($current)) -and
             (([IO.File]::GetAttributes($current) -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
-            throw 'El paquete no admite enlaces ni reparse points.'
+            throw 'Packages do not allow links or reparse points.'
         }
         $current = [IO.Path]::GetDirectoryName($current)
     }
@@ -20,29 +20,29 @@ function Assert-PlainPath([string]$Path) {
 
 Assert-PlainPath $packageRoot
 if (-not $OutputPath) {
-    $OutputPath = Join-Path (Split-Path $packageRoot -Parent) ($repository + '-v0.3.0-experimental.zip')
+    $OutputPath = Join-Path (Split-Path $packageRoot -Parent) ($repository + '-v0.4.0-experimental.zip')
 }
 $output = [IO.Path]::GetFullPath($OutputPath)
 Assert-PlainPath $output
 if (Test-Path -LiteralPath $output) {
-    throw 'El ZIP ya existe. Elegí otra ruta para conservar la descarga anterior.'
+    throw 'The ZIP already exists. Choose a new path to preserve the previous release.'
 }
 $manifestPath = Join-Path $packageRoot 'BUILD-MANIFEST.json'
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-    throw 'Primero ejecutá COMPILAR.cmd o scripts/Build.ps1 con el producto de este repositorio.'
+    throw 'Run BUILD.cmd or scripts/Build.ps1 for this repository product first.'
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.Version -ne '0.3.0' -or $manifest.SelectedProduct -ne $product -or
+if ($manifest.Version -ne '0.4.0' -or $manifest.SelectedProduct -ne $product -or
     @($manifest.Executables).Count -ne 1 -or $manifest.Executables[0].Name -ne $executable) {
-    throw 'El manifiesto debe contener únicamente el ejecutable de este proyecto.'
+    throw 'The manifest must contain only this project executable.'
 }
 if ($manifest.AutomatedTestsPassed -ne $true -or $manifest.ClientEngineBuildsIncluded -ne $false -or
     $manifest.MemoryTargetVerified -ne $false) {
-    throw 'La descarga requiere pruebas aprobadas y un estado de rendimiento experimental coherente.'
+    throw 'Packaging requires passing tests and a consistent experimental performance status.'
 }
 $actualHash = (Get-FileHash -LiteralPath (Join-Path $packageRoot $executable) -Algorithm SHA256).Hash
 if ($actualHash -ne $manifest.Executables[0].SHA256) {
-    throw 'El ejecutable cambió después de la compilación.'
+    throw 'The executable changed after it was built.'
 }
 $relativeFiles = @(
     '.gitattributes'
@@ -54,8 +54,8 @@ $relativeFiles = @(
     'assets/shared/tawop.ico'
     'assets/shared/tawop.svg'
     'assets/steam/tawop.css'
+    'BUILD.cmd'
     'BUILD-MANIFEST.json'
-    'COMPILAR.cmd'
     'CONTRIBUTING.md'
     'docs/ARQUITECTURA.md'
     'docs/RENDIMIENTO.md'
@@ -76,15 +76,18 @@ $relativeFiles = @(
     'src/app.manifest'
     'src/AsarArchive.cs'
     'src/AssetStore.cs'
+    'src/AutoSetup.cs'
     'src/ChromeMod.cs'
     'src/DiscordMod.cs'
     'src/ModCore.cs'
     'src/Program.cs'
     'src/SteamMod.cs'
+    'START-HERE.txt'
     'SteamTawop.cmd'
     'SteamTawop.exe'
     'tests/Asar.Tests.cs'
     'tests/AssetStore.Tests.cs'
+    'tests/AutoSetup.Tests.cs'
     'tests/Chrome.Tests.cs'
     'tests/Core.Tests.cs'
     'tests/GuiSmoke.cs'
@@ -102,15 +105,15 @@ $files = New-Object 'System.Collections.Generic.List[string]'
 foreach ($relative in $relativeFiles) {
     if ($relative -match '(^|/)(artifacts|\.git|\.tawop|user-data|node_modules|results|backups|profiles|reports|releases)(/|$)' -or
         [IO.Path]::IsPathRooted($relative) -or $relative -match '(^|/)\.\.(/|$)') {
-        throw 'La lista de publicación contiene una ruta no permitida.'
+        throw 'The publication inventory contains a disallowed path.'
     }
     $path = [IO.Path]::GetFullPath((Join-Path $packageRoot $relative))
     if (-not $path.StartsWith($packageRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Un archivo está fuera del proyecto.'
+        throw 'A file is outside the project.'
     }
     Assert-PlainPath $path
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "Falta el archivo publicable $relative"
+        throw "Missing public file: $relative"
     }
     $files.Add($path)
 }
