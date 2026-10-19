@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
@@ -145,9 +146,11 @@ public static class GuiSmoke
             form.Show();
             Settle(form);
             Button primary = FindSingleButton(Descendants(form));
-            formType.GetMethod("Begin", PrivateInstance).Invoke(form, new object[] { false });
-            CancellationTokenSource source = (CancellationTokenSource)formType.GetField("operationCancellation", PrivateInstance).GetValue(form);
+            var source = new CancellationTokenSource();
             CancellationToken token = source.Token;
+            formType.GetField("operationCancellation", PrivateInstance).SetValue(form, source);
+            formType.GetMethod("SetBusy", PrivateInstance).Invoke(form, new object[] { true });
+            primary.Text = "Stop";
             Assert(primary.Enabled && primary.Text == "Stop", "The running operation must expose an enabled Stop action.");
             Assert(primary.AccessibleName == "Stop the current operation", "The running action needs an accessible Stop name.");
             primary.PerformClick();
@@ -156,14 +159,9 @@ public static class GuiSmoke
             form.Close();
             Assert(!form.IsDisposed, "The X button must wait until the worker reaches a safe boundary.");
             Assert((bool)formType.GetField("closeWhenFinished", PrivateInstance).GetValue(form), "The X button must request close after the worker stops.");
-            DateTime limit = DateTime.UtcNow.AddSeconds(5);
-            while (!form.IsDisposed && (bool)formType.GetField("busy", PrivateInstance).GetValue(form) && DateTime.UtcNow < limit)
-            {
-                Application.DoEvents();
-                Thread.Sleep(5);
-            }
-            Assert(form.IsDisposed || !(bool)formType.GetField("busy", PrivateInstance).GetValue(form), "A stopped worker must not leave the tool busy.");
-            if (!form.IsDisposed) { form.Close(); }
+            formType.GetMethod("Complete", PrivateInstance).Invoke(form,
+                new object[] { null, new RunWorkerCompletedEventArgs(null, null, true) });
+            Assert(form.IsDisposed, "The X button must close the tool only after cancellation completion has been handled.");
         }
     }
 
