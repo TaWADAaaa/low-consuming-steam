@@ -19,8 +19,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Reversible client resource patches and a Chrome performance profile.")]
 [assembly: AssemblyCompany("Low Consuming community")]
 [assembly: AssemblyProduct("Low Consuming Tools")]
-[assembly: AssemblyVersion("0.5.0.0")]
-[assembly: AssemblyFileVersion("0.5.0.0")]
+[assembly: AssemblyVersion("0.5.1.0")]
+[assembly: AssemblyFileVersion("0.5.1.0")]
 namespace Tawop
 {
     internal static class Program
@@ -214,7 +214,7 @@ namespace Tawop
             details.Font = new Font("Consolas", 9);
             details.AccessibleName = "Technical details";
             details.Visible = false;
-            details.Text = "Version 0.5.0. Local, reversible patches. No account or password is needed.\r\n"
+            details.Text = "Version 0.5.1. Local, reversible patches. No account or password is needed.\r\n"
                 + "Resource savings still need measurement. No data is uploaded by this tool.";
             content.Controls.Add(details, 0, 7);
             Label note = MakeLabel("Experimental · Resource savings are not verified.");
