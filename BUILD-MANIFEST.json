@@ -1,0 +1,17 @@
+﻿{
+    "Version":  "0.3.0",
+    "SelectedProduct":  "Steam",
+    "BuiltUtc":  "2026-10-19T02:55:57.1654686Z",
+    "Compiler":  "4.8.9221.0 built by: NET481REL1LAST_25H2",
+    "Executables":  [
+                        {
+                            "Name":  "SteamTawop.exe",
+                            "Bytes":  72704,
+                            "SHA256":  "0CA29990933ADF3784BFE02B88F522C6BF07C871719C570B989CB7A50892912B",
+                            "Kind":  "local patch tool; not a replacement client"
+                        }
+                    ],
+    "ClientEngineBuildsIncluded":  false,
+    "MemoryTargetVerified":  false,
+    "AutomatedTestsPassed":  true
+}

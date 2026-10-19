@@ -1,0 +1,11 @@
+artifacts/
+releases/
+.tawop/
+*.tmp
+*.log
+*.pdb
+bin/
+obj/
+node_modules/
+local-build/
+user-data/
