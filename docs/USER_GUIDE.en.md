@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Open the [release page](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.5.0-experimental), expand **Assets** and download **low-consuming-steam-v0.5.0-experimental.zip**. Right-click the ZIP, choose **Extract All**, and open the new folder. Double-click **SteamTawop.exe**. The individual EXE download also works by itself.
+Open the [release page](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.5.1-experimental), expand **Assets** and download **low-consuming-steam-v0.5.1-experimental.zip**. Right-click the ZIP, choose **Extract All**, and open the new folder. Double-click **SteamTawop.exe**. The individual EXE download also works by itself.
 
 You do not need to understand source code or run a command. Developer files are included so the tool can be reviewed and rebuilt. BUILD.cmd is for developers; it is not the app.
 

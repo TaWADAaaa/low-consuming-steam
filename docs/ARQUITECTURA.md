@@ -30,7 +30,7 @@ Work runs away from the GUI event loop. The main button becomes Stop while busy;
 
 Every EXE embeds discord/tawop.css, discord/preload.js and steam/tawop.css. A complete external assets folder takes precedence for explicit customization. An incomplete folder is rejected rather than mixing versions.
 
-Without external assets, resources are extracted under %LOCALAPPDATA%\TawopModKit\assets\0.5.0-<hash16>. SHA256 hashes are checked when creating and reusing them. A mutex coordinates concurrent preparation; temporary files are moved into place. Links, absent resources and files beyond the size limit are rejected. Modified cache files are preserved and reported, not overwritten.
+Without external assets, resources are extracted under %LOCALAPPDATA%\TawopModKit\assets\0.5.0-<hash16>. Versions 0.5.0 and 0.5.1 share this resource bundle. SHA256 hashes are checked when creating and reusing them. A mutex coordinates concurrent preparation; temporary files are moved into place. Links, absent resources and files beyond the size limit are rejected. Modified cache files are preserved and reported, not overwritten.
 
 ## Backups and recovery
 

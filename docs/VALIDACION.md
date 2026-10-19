@@ -1,4 +1,4 @@
-# Validation: Low Consuming Steam v0.5.0
+# Validation: Low Consuming Steam v0.5.1
 
 Prepared on October 19, 2026. This is an experimental release. SteamTawop.exe is a local patch tool, not a replacement client. BUILD-MANIFEST.json records its version, hash and automated-test result. A passing build does not prove the resource budget or full real-client operation.
 
