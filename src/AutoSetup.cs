@@ -47,12 +47,21 @@ namespace Tawop
             return Detect(product, KnownCandidates(product));
         }
 
+        public static string Detect(Product product, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return Detect(product);
+            }
+        }
+
         internal static string Detect(Product product, IEnumerable<string> candidates)
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int checkedCount = 0;
             foreach (string candidate in candidates)
             {
+                OperationControl.Check();
                 if (String.IsNullOrWhiteSpace(candidate) || !seen.Add(candidate))
                 {
                     continue;
@@ -86,6 +95,7 @@ namespace Tawop
 
         public static string Resolve(Product product, string selectedPath)
         {
+            OperationControl.Check();
             if (String.IsNullOrWhiteSpace(selectedPath))
             {
                 string detected = Detect(product);
@@ -112,6 +122,7 @@ namespace Tawop
                 int count = 0;
                 foreach (string folder in Directory.EnumerateDirectories(root, "app-*", SearchOption.TopDirectoryOnly))
                 {
+                    OperationControl.Check();
                     if (++count > MaximumVersionFolders)
                     {
                         throw new InvalidOperationException("This Discord folder contains too many app versions. Choose the app-version folder directly.");
@@ -161,6 +172,23 @@ namespace Tawop
             return Run(product, selectedPath, assetsPath, restore, progress, new AutoSetupRuntime(), new AutoSetupPatches());
         }
 
+        public static AutoSetupResult Run(Product product, string selectedPath, string assetsPath, bool restore,
+            Action<string> progress, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, progress))
+            {
+                return Run(product, selectedPath, assetsPath, restore, progress);
+            }
+        }
+
+        public static string Resolve(Product product, string selectedPath, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return Resolve(product, selectedPath);
+            }
+        }
+
         internal static AutoSetupResult Run(Product product, string selectedPath, string assetsPath, bool restore,
             Action<string> progress, IAutoSetupRuntime runtime, IAutoSetupPatches patches)
         {
@@ -170,10 +198,14 @@ namespace Tawop
             }
 
             Notify(progress, "Finding " + (product == Product.Chrome ? "Chromium source files" : product.ToString()) + "...");
+            OperationControl.Check();
             string root = Resolve(product, selectedPath);
             Notify(progress, restore ? "Checking your original backup..." : "Checking compatibility before making any changes...");
+            OperationControl.Check();
             PatchInspection inspection = patches.Inspect(product, root, assetsPath);
+            OperationControl.Check();
             bool hasBackup = !String.IsNullOrEmpty(inspection.BackupPath);
+            bool upgrade = false;
             if (restore && !hasBackup)
             {
                 throw new InvalidOperationException("There are no changes to undo in this installation.");
@@ -183,28 +215,39 @@ namespace Tawop
             {
                 if (MatchesAppliedFiles(root, inspection))
                 {
-                    return new AutoSetupResult
+                    if (inspection.ProfileVersion == ModCore.CurrentProfileVersion)
                     {
-                        Root = root,
-                        AlreadyOptimized = true,
-                        Inspection = inspection,
-                        Message = "Already optimized. Your original backup is safe."
-                    };
-                }
+                        return new AutoSetupResult
+                        {
+                            Root = root,
+                            AlreadyOptimized = true,
+                            Inspection = inspection,
+                            Message = "Already optimized with the current profile. Your original backup is safe."
+                        };
+                    }
 
-                throw new InvalidOperationException("This installation has an earlier backup and some files have changed. Use Undo changes before trying to optimize again. Your backup has been kept.");
+                    upgrade = true;
+                }
+                else
+                {
+                    throw new InvalidOperationException("This installation has an earlier backup and some files have changed. Use Undo changes before trying to optimize again. Your backup has been kept.");
+                }
             }
 
             AutoSetupCloseResult close = new AutoSetupCloseResult { Closed = true };
             AutoSetupResult result = null;
             Exception operationError = null;
             string restartError = null;
+            bool originalsRestoredForUpgrade = false;
+            bool applyingUpgradedProfile = false;
             try
             {
                 if (product != Product.Chrome)
                 {
                     Notify(progress, "Asking " + product + " to close safely...");
+                    OperationControl.Check();
                     close = runtime.Close(product, root, progress);
+                    OperationControl.Check();
                     if (close == null || !close.Closed)
                     {
                         throw new InvalidOperationException(close == null || String.IsNullOrEmpty(close.Error)
@@ -213,7 +256,21 @@ namespace Tawop
                     }
                 }
 
+                if (upgrade)
+                {
+                    Notify(progress, "Replacing the previous profile: restoring your original files first...");
+                    OperationControl.Check();
+                    patches.Restore(product, root);
+                    originalsRestoredForUpgrade = true;
+                    Notify(progress, "Checking the new optimization profile...");
+                    OperationControl.Check();
+                    inspection = patches.Inspect(product, root, assetsPath);
+                    OperationControl.Check();
+                }
+
                 Notify(progress, restore ? "Restoring your original files..." : "Saving the original files and applying the lighter interface...");
+                OperationControl.Check();
+                applyingUpgradedProfile = upgrade;
                 PatchInspection completed = restore ? patches.Restore(product, root) : patches.Apply(product, root, assetsPath);
                 result = new AutoSetupResult
                 {
@@ -226,7 +283,9 @@ namespace Tawop
             }
             catch (Exception error)
             {
-                operationError = error;
+                operationError = originalsRestoredForUpgrade && !applyingUpgradedProfile && !(error is OperationCanceledException)
+                    ? new InvalidOperationException("Your original files were restored, but the new optimization could not be applied. " + error.Message, error)
+                    : error;
             }
             finally
             {
@@ -250,6 +309,16 @@ namespace Tawop
 
             if (operationError != null)
             {
+                if (operationError is OperationCanceledException)
+                {
+                    if (restartError != null)
+                    {
+                        throw new InvalidOperationException("Optimization stopped safely. " + restartError, operationError);
+                    }
+
+                    throw new OperationCanceledException("Stopped safely. Recovery backups have been kept when needed. " + (restartError ?? ""), operationError, OperationControl.Token);
+                }
+
                 if (restartError != null)
                 {
                     throw new InvalidOperationException(operationError.Message + " " + restartError, operationError);
@@ -278,7 +347,8 @@ namespace Tawop
             foreach (PatchRecord record in inspection.Files)
             {
                 string file = Paths.Child(root, record.RelativePath);
-                if (record.Restored || !File.Exists(file) || ModCore.Hash(ModCore.ReadFile(file)) != record.AfterHash)
+                OperationControl.Check();
+                if (record.Restored || !File.Exists(file) || ModCore.HashFile(file) != record.AfterHash)
                 {
                     return false;
                 }
@@ -420,14 +490,19 @@ namespace Tawop
 
     internal sealed class AutoSetupPatches : IAutoSetupPatches
     {
+        private PatchInspection prepared;
+
         public PatchInspection Inspect(Product product, string root, string assets)
         {
-            return ModCore.Inspect(product, root, assets);
+            prepared = ModCore.Inspect(product, root, assets);
+            return prepared;
         }
 
         public PatchInspection Apply(Product product, string root, string assets)
         {
-            return ModCore.Apply(product, root, assets);
+            PatchInspection inspected = prepared;
+            prepared = null;
+            return ModCore.ApplyPrepared(product, root, assets, inspected);
         }
 
         public PatchInspection Restore(Product product, string root)
@@ -440,12 +515,17 @@ namespace Tawop
     {
         public AutoSetupCloseResult Close(Product product, string root, Action<string> progress)
         {
+            OperationControl.Check();
             List<Process> running = ScopedProcesses(product, root);
             bool wasRunning = running.Count > 0;
             try
             {
                 foreach (Process process in running)
                 {
+                    if (OperationControl.Token.IsCancellationRequested)
+                    {
+                        break;
+                    }
                     try
                     {
                         process.CloseMainWindow();
@@ -474,7 +554,13 @@ namespace Tawop
                     return new AutoSetupCloseResult { WasRunning = wasRunning, Closed = true };
                 }
 
-                Thread.Sleep(200);
+                if (OperationControl.Wait(200))
+                {
+                    running = ScopedProcesses(product, root);
+                    finished = running.Count == 0;
+                    DisposeProcesses(running);
+                    return new AutoSetupCloseResult { WasRunning = wasRunning, Closed = finished };
+                }
             }
             while (DateTime.UtcNow < until);
 

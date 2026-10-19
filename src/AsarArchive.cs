@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace Tawop
@@ -25,6 +26,8 @@ namespace Tawop
             internal string Path;
             internal Dictionary<string, object> Node;
             internal byte[] Data;
+            internal int DataOffset;
+            internal int Length;
             internal long OriginalOffset;
             internal int BlockSize;
         }
@@ -36,6 +39,7 @@ namespace Tawop
 
         public static AsarArchive Read(byte[] data)
         {
+            OperationControl.Check();
             if (data == null)
             {
                 throw new ArgumentNullException("data");
@@ -93,7 +97,8 @@ namespace Tawop
             long previousEnd = 0;
             foreach (Entry entry in ranges)
             {
-                if (entry.Data.Length == 0)
+                OperationControl.Check();
+                if (entry.Length == 0)
                 {
                     continue;
                 }
@@ -103,10 +108,18 @@ namespace Tawop
                     throw new InvalidDataException("Overlapping ASAR file data.");
                 }
 
-                previousEnd = entry.OriginalOffset + entry.Data.Length;
+                previousEnd = entry.OriginalOffset + entry.Length;
             }
 
             return archive;
+        }
+
+        public static AsarArchive Read(byte[] data, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return Read(data);
+            }
         }
 
         public bool ContainsFile(string path)
@@ -124,7 +137,9 @@ namespace Tawop
                 throw new FileNotFoundException("ASAR file not found.", path);
             }
 
-            return (byte[])entry.Data.Clone();
+            byte[] result = new byte[entry.Length];
+            Copy(entry.Data, entry.DataOffset, result, 0, result.Length);
+            return result;
         }
 
         public void SetFile(string path, byte[] content)
@@ -147,6 +162,8 @@ namespace Tawop
             }
 
             entry.Data = (byte[])content.Clone();
+            entry.DataOffset = 0;
+            entry.Length = content.Length;
         }
 
         public byte[] Repack()
@@ -154,10 +171,11 @@ namespace Tawop
             long dataLength = 0;
             foreach (Entry entry in entries)
             {
-                entry.Node["size"] = entry.Data.Length;
+                OperationControl.Check();
+                entry.Node["size"] = entry.Length;
                 entry.Node["offset"] = dataLength.ToString(CultureInfo.InvariantCulture);
-                entry.Node["integrity"] = MakeIntegrity(entry.Data, entry.BlockSize);
-                dataLength += entry.Data.Length;
+                entry.Node["integrity"] = MakeIntegrity(entry.Data, entry.DataOffset, entry.Length, entry.BlockSize);
+                dataLength += entry.Length;
                 if (dataLength >= MaximumArchiveBytes)
                 {
                     throw new InvalidDataException("Repacked ASAR is too large.");
@@ -188,12 +206,21 @@ namespace Tawop
             int position = (int)payloadBase;
             foreach (Entry entry in entries)
             {
-                Buffer.BlockCopy(entry.Data, 0, result, position, entry.Data.Length);
-                position += entry.Data.Length;
+                OperationControl.Check();
+                Copy(entry.Data, entry.DataOffset, result, position, entry.Length);
+                position += entry.Length;
             }
 
             Read(result);
             return result;
+        }
+
+        public byte[] Repack(CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return Repack();
+            }
         }
 
         public static byte[] Create(IDictionary<string, byte[]> files)
@@ -211,6 +238,7 @@ namespace Tawop
             paths.Sort(StringComparer.Ordinal);
             foreach (string path in paths)
             {
+                OperationControl.Check();
                 ValidatePath(path);
                 byte[] content = files[path];
                 if (content == null || content.Length >= MaximumArchiveBytes)
@@ -262,6 +290,7 @@ namespace Tawop
                     Path = path,
                     Node = fileNode,
                     Data = (byte[])content.Clone(),
+                    Length = content.Length,
                     BlockSize = DefaultBlockSize
                 };
                 archive.entries.Add(entry);
@@ -281,6 +310,7 @@ namespace Tawop
             var windowsNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (KeyValuePair<string, object> pair in files)
             {
+                OperationControl.Check();
                 ValidateSegment(pair.Key);
                 if (!windowsNames.Add(pair.Key))
                 {
@@ -329,14 +359,15 @@ namespace Tawop
                     throw new InvalidDataException("Total ASAR member size exceeds the supported limit.");
                 }
 
-                byte[] content = new byte[(int)size];
-                Buffer.BlockCopy(archive, (int)(payloadBase + offset), content, 0, content.Length);
-                int blockSize = VerifyIntegrity(GetRequired(node, "integrity"), content, path);
+                int dataOffset = (int)(payloadBase + offset);
+                int blockSize = VerifyIntegrity(GetRequired(node, "integrity"), archive, dataOffset, (int)size, path);
                 var entry = new Entry
                 {
                     Path = path,
                     Node = node,
-                    Data = content,
+                    Data = archive,
+                    DataOffset = dataOffset,
+                    Length = (int)size,
                     OriginalOffset = offset,
                     BlockSize = blockSize
                 };
@@ -345,7 +376,7 @@ namespace Tawop
             }
         }
 
-        private static int VerifyIntegrity(object value, byte[] content, string path)
+        private static int VerifyIntegrity(object value, byte[] content, int dataOffset, int contentLength, string path)
         {
             var integrity = value as Dictionary<string, object>;
             if (integrity == null || !String.Equals(GetRequired(integrity, "algorithm") as string, "SHA256", StringComparison.Ordinal))
@@ -361,13 +392,13 @@ namespace Tawop
 
             int blockSize = (int)blockSizeValue;
             string expected = GetRequired(integrity, "hash") as string;
-            if (!EqualHash(expected, Hash(content, 0, content.Length)))
+            if (!EqualHash(expected, Hash(content, dataOffset, contentLength)))
             {
                 throw new InvalidDataException("ASAR integrity hash mismatch: " + path);
             }
 
             var blocks = GetRequired(integrity, "blocks") as IList;
-            int count = (content.Length + blockSize - 1) / blockSize;
+            int count = (contentLength + blockSize - 1) / blockSize;
             if (blocks == null || blocks.Count != count)
             {
                 throw new InvalidDataException("ASAR integrity block count mismatch: " + path);
@@ -375,9 +406,10 @@ namespace Tawop
 
             for (int i = 0; i < count; i++)
             {
+                OperationControl.Check();
                 int start = i * blockSize;
-                int length = Math.Min(blockSize, content.Length - start);
-                if (!EqualHash(blocks[i] as string, Hash(content, start, length)))
+                int length = Math.Min(blockSize, contentLength - start);
+                if (!EqualHash(blocks[i] as string, Hash(content, dataOffset + start, length)))
                 {
                     throw new InvalidDataException("ASAR integrity block mismatch: " + path);
                 }
@@ -386,12 +418,13 @@ namespace Tawop
             return blockSize;
         }
 
-        private static Dictionary<string, object> MakeIntegrity(byte[] content, int blockSize)
+        private static Dictionary<string, object> MakeIntegrity(byte[] content, int dataOffset, int contentLength, int blockSize)
         {
             var blocks = new List<string>();
-            for (int offset = 0; offset < content.Length; offset += blockSize)
+            for (int offset = 0; offset < contentLength; offset += blockSize)
             {
-                blocks.Add(Hash(content, offset, Math.Min(blockSize, content.Length - offset)));
+                OperationControl.Check();
+                blocks.Add(Hash(content, dataOffset + offset, Math.Min(blockSize, contentLength - offset)));
             }
 
             return new Dictionary<string, object>
@@ -402,7 +435,7 @@ namespace Tawop
                 },
                 {
                     "hash",
-                    Hash(content, 0, content.Length)
+                    Hash(content, dataOffset, contentLength)
                 },
                 {
                     "blockSize",
@@ -419,7 +452,26 @@ namespace Tawop
         {
             using (SHA256 algorithm = SHA256.Create())
             {
-                return BitConverter.ToString(algorithm.ComputeHash(content, offset, count)).Replace("-", "").ToLowerInvariant();
+                int end = offset + count;
+                for (int position = offset; position < end; position += 65536)
+                {
+                    OperationControl.Check();
+                    algorithm.TransformBlock(content, position, Math.Min(65536, end - position), null, 0);
+                }
+
+                OperationControl.Check();
+                algorithm.TransformFinalBlock(new byte[0], 0, 0);
+                return BitConverter.ToString(algorithm.Hash).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        private static void Copy(byte[] source, int sourceOffset, byte[] target, int targetOffset, int count)
+        {
+            for (int copied = 0; copied < count; copied += 65536)
+            {
+                OperationControl.Check();
+                int length = Math.Min(65536, count - copied);
+                Buffer.BlockCopy(source, sourceOffset + copied, target, targetOffset + copied, length);
             }
         }
 

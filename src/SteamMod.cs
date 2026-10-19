@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Tawop
 {
@@ -13,6 +14,7 @@ namespace Tawop
         private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
         public static List<PatchEdit> Prepare(string installPath, string assetsPath)
         {
+            OperationControl.Report("Preparing Steam interface resources...");
             string root = ValidateRoot(installPath);
             string assets = ValidateRoot(assetsPath);
             string cssDirectory = ResolvePlainPath(root, Path.Combine("steamui", "css"), true);
@@ -29,6 +31,7 @@ namespace Tawop
             AddExisting(targets, cssDirectory, "library.css");
             foreach (string file in Directory.GetFiles(cssDirectory, "chunk~*.css", SearchOption.TopDirectoryOnly))
             {
+                OperationControl.Check();
                 targets.Add(file);
             }
 
@@ -41,6 +44,7 @@ namespace Tawop
             List<PatchEdit> edits = new List<PatchEdit>();
             foreach (string file in targets)
             {
+                OperationControl.Report("Preparing Steam stylesheet " + (edits.Count + 1) + " of " + targets.Count + "...");
                 string relative = Path.Combine("steamui", "css", Path.GetFileName(file));
                 string safeFile = ResolvePlainPath(root, relative, false);
                 byte[] original = ReadLimited(safeFile, MaxStyleBytes);
@@ -66,7 +70,54 @@ namespace Tawop
                 throw new InvalidDataException("No supported Steam UI stylesheets with CSS declarations were found.");
             }
 
+            string scriptDirectory = ResolvePlainPath(root, "steamui", true);
+            string mainScript = ResolvePlainPath(root, Path.Combine("steamui", "sp.js"), false);
+            AddEngineEdit(edits, root, mainScript, true);
+            string[] scripts = Directory.GetFiles(scriptDirectory, "chunk~*.js", SearchOption.TopDirectoryOnly);
+            if (scripts.Length > 256)
+            {
+                throw new InvalidDataException("Unexpected number of Steam UI script chunks; this build needs review.");
+            }
+
+            Array.Sort(scripts, StringComparer.OrdinalIgnoreCase);
+            int engineChunks = 0;
+            foreach (string script in scripts)
+            {
+                OperationControl.Check();
+                if (!Regex.IsMatch(Path.GetFileName(script), "^chunk~[0-9a-f]{1,32}\\.js$", RegexOptions.CultureInvariant))
+                {
+                    continue;
+                }
+
+                if (AddEngineEdit(edits, root, script, false))
+                {
+                    engineChunks++;
+                    if (engineChunks > 4)
+                    {
+                        throw new InvalidDataException("Steam contains too many client settings stores; this build needs review.");
+                    }
+                }
+            }
+
             return edits;
+        }
+
+        private static bool AddEngineEdit(List<PatchEdit> edits, string root, string file, bool required)
+        {
+            OperationControl.Report("Checking Steam's native low resource settings...");
+            string relative = Path.Combine("steamui", Path.GetFileName(file));
+            string safeFile = ResolvePlainPath(root, relative, false);
+            byte[] original = ReadLimited(safeFile, 32L * 1024 * 1024);
+            string source = DecodeStrict(original, relative);
+            if (!required && !AggressivePolicy.ContainsSteamSettingsStore(source))
+            {
+                return false;
+            }
+
+            string patched = AggressivePolicy.PatchSteamBundle(source);
+            OperationControl.Check();
+            edits.Add(new PatchEdit { RelativePath = relative, Content = StrictUtf8.GetBytes(patched), ExpectedBeforeHash = ModCore.Hash(original) });
+            return true;
         }
 
         public static string ReadBuildVersion(string installPath)
@@ -121,6 +172,7 @@ namespace Tawop
                     int count;
                     while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
                     {
+                        OperationControl.Check();
                         if (output.Length + count > limit)
                         {
                             throw new InvalidDataException("File exceeds the supported size: " + Path.GetFileName(path));
@@ -229,6 +281,11 @@ namespace Tawop
             char quote = '\0';
             for (int index = 0; index < source.Length; index++)
             {
+                if ((index & 65535) == 0)
+                {
+                    OperationControl.Check();
+                }
+
                 char character = source[index];
                 if (quote != '\0')
                 {

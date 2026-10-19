@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 #if DISCORD
@@ -15,11 +16,11 @@ using System.Windows.Forms;
 #else
 [assembly: AssemblyTitle("Low Consuming Chrome")]
 #endif
-[assembly: AssemblyDescription("Simple, reversible local patches. Original client or Chromium sources required.")]
+[assembly: AssemblyDescription("Reversible client resource patches and a Chrome performance profile.")]
 [assembly: AssemblyCompany("Low Consuming community")]
 [assembly: AssemblyProduct("Low Consuming Tools")]
-[assembly: AssemblyVersion("0.4.0.0")]
-[assembly: AssemblyFileVersion("0.4.0.0")]
+[assembly: AssemblyVersion("0.5.0.0")]
+[assembly: AssemblyFileVersion("0.5.0.0")]
 namespace Tawop
 {
     internal static class Program
@@ -60,7 +61,7 @@ namespace Tawop
             {
                 if (args.Length == 1 && args[0] == "--version")
                 {
-                    Console.WriteLine("Low Consuming " + SelectedProduct + " 0.4.0 (local patch tool)");
+                    Console.WriteLine("Low Consuming " + SelectedProduct + " 0.5.0 (local patch tool)");
                     return 0;
                 }
                 if (args.Length < 2 || (args[0] != "--inspect" && args[0] != "--apply" && args[0] != "--restore"))
@@ -131,6 +132,10 @@ namespace Tawop
         private string selectedRoot;
         private bool busy;
         private bool finished;
+        private bool detecting;
+        private bool stopping;
+        private bool closeWhenFinished;
+        private CancellationTokenSource operationCancellation;
 
         internal string SelectedRoot
         {
@@ -138,7 +143,11 @@ namespace Tawop
             set { selectedRoot = value; UpdateReadyState(); }
         }
 
-        public ModForm(Product selectedProduct)
+        public ModForm(Product selectedProduct) : this(selectedProduct, true)
+        {
+        }
+
+        public ModForm(Product selectedProduct, bool discoverInstallation)
         {
             product = selectedProduct;
             Text = "Low Consuming " + product;
@@ -165,11 +174,13 @@ namespace Tawop
             title.Margin = new Padding(0, 0, 0, 12);
             content.Controls.Add(title, 0, 0);
             content.Controls.Add(MakeLabel(product == Product.Chrome
-                ? "Prepare a lighter Chromium build. This changes source files; it does not install a browser."
-                : "Make " + product + " look simpler. Click once to check, back up and apply the changes."), 0, 1);
+                ? "Turn on Chrome Maximum Memory Saver and reduce preloading and background work. Your tabs stay open."
+                : "Reduce decorative work in " + product + ". Click once to check, back up and apply the aggressive profile."), 0, 1);
             Label steps = MakeLabel(product == Product.Chrome
-                ? "Your existing source files are backed up automatically."
-                : "The app may close briefly. Finish calls and active tasks first.");
+                ? "Inactive tabs may reload. Changes can need a policy refresh or browser restart."
+                : product == Product.Discord
+                    ? "Animated images become stills. Spellcheck is off. Finish calls first."
+                    : "Low performance and bandwidth modes are on. Community content is reduced.");
             steps.Font = new Font(Font.FontFamily, 10);
             content.Controls.Add(steps, 0, 2);
             ConfigureLabel(found);
@@ -203,7 +214,7 @@ namespace Tawop
             details.Font = new Font("Consolas", 9);
             details.AccessibleName = "Technical details";
             details.Visible = false;
-            details.Text = "Version 0.4.0. Local, reversible patches. No account or password is needed.\r\n"
+            details.Text = "Version 0.5.0. Local, reversible patches. No account or password is needed.\r\n"
                 + "Resource savings still need measurement. No data is uploaded by this tool.";
             content.Controls.Add(details, 0, 7);
             Label note = MakeLabel("Experimental · Resource savings are not verified.");
@@ -232,15 +243,42 @@ namespace Tawop
             worker.DoWork += delegate(object sender, DoWorkEventArgs e)
             {
                 object[] request = (object[])e.Argument;
-                bool restore = (bool)request[1];
-                string assets = restore ? null : Program.AssetsPath;
-                e.Result = AutoSetup.Run(product, (string)request[0], assets, restore,
-                    delegate(string message) { worker.ReportProgress(0, message); });
+                CancellationToken cancellation = (CancellationToken)request[3];
+                try
+                {
+                    if ((bool)request[2])
+                    {
+                        e.Result = product == Product.Chrome ? ChromeRuntimeProfile.Detect(cancellation) : AutoSetup.Detect(product, cancellation);
+                        cancellation.ThrowIfCancellationRequested();
+                        return;
+                    }
+                    bool restore = (bool)request[1];
+                    if (product == Product.Chrome)
+                    {
+                        e.Result = ChromeRuntimeProfile.Run((string)request[0], restore,
+                            delegate(string message) { worker.ReportProgress(0, message); }, cancellation);
+                        return;
+                    }
+                    string assets = restore ? null : AssetStore.ResolveDirectory(Program.PackageRoot, cancellation);
+                    e.Result = AutoSetup.Run(product, (string)request[0], assets, restore,
+                        delegate(string message) { worker.ReportProgress(0, message); }, cancellation);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (!cancellation.IsCancellationRequested) { throw; }
+                    e.Cancel = true;
+                }
             };
-            worker.ProgressChanged += delegate(object sender, ProgressChangedEventArgs e) { status.Text = (string)e.UserState; };
+            worker.ProgressChanged += delegate(object sender, ProgressChangedEventArgs e)
+            {
+                string message = (string)e.UserState;
+                status.Text = stopping && !message.StartsWith("Restoring", StringComparison.Ordinal) && !message.StartsWith("Recovering", StringComparison.Ordinal)
+                    ? "Stopping safely. Finishing the current change or restoring the backup..." : message;
+            };
             worker.RunWorkerCompleted += Complete;
             start.Click += delegate
             {
+                if (busy) { RequestStop(false); return; }
                 if (finished) { Close(); return; }
                 if (String.IsNullOrEmpty(selectedRoot) && !ChooseFolder()) { return; }
                 Begin(false);
@@ -255,10 +293,15 @@ namespace Tawop
             };
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
-                if (busy) { e.Cancel = true; status.Text = "Please wait until setup finishes."; }
+                if (busy) { e.Cancel = true; RequestStop(true); }
             };
-            selectedRoot = AutoSetup.Detect(product);
             UpdateReadyState();
+            if (discoverInstallation)
+            {
+                found.Text = "Looking for " + product + "...";
+                start.Enabled = false;
+                Shown += delegate { BeginDetection(); };
+            }
         }
 
         private static Label MakeLabel(string text)
@@ -281,6 +324,7 @@ namespace Tawop
         }
         private bool HasBackup()
         {
+            if (product == Product.Chrome) { return ChromeRuntimeProfile.HasBackup(); }
             return !String.IsNullOrEmpty(selectedRoot)
                 && File.Exists(Path.Combine(selectedRoot, ".tawop", product.ToString().ToLowerInvariant() + ".json"));
         }
@@ -288,12 +332,11 @@ namespace Tawop
         {
             finished = false;
             found.Text = String.IsNullOrEmpty(selectedRoot)
-                ? (product == Product.Chrome ? "Choose your Chromium source folder to begin." : product + " was not found automatically.")
-                : (product == Product.Chrome ? "Chromium source folder selected." : product + " found. No folder setup needed.");
+                ? product + " was not found automatically."
+                : product + " found. No folder setup needed.";
             start.Text = String.IsNullOrEmpty(selectedRoot)
-                ? (product == Product.Chrome ? "Choose Chromium folder" : "Choose " + product + " folder")
-                : (product == Product.Chrome ? "Prepare Chromium sources" : "Optimize " + product);
-            status.Text = "Ready. Your original files will be backed up.";
+                ? "Choose " + product + " folder" : "Optimize " + product;
+            status.Text = product == Product.Chrome ? "Ready. Undo will remove only this tool's performance policies." : "Ready. Your original files will be backed up.";
             undo.Enabled = HasBackup();
         }
         private bool ChooseFolder()
@@ -302,13 +345,15 @@ namespace Tawop
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
                 dialog.Description = product == Product.Chrome
-                    ? "Choose src from a Chromium source checkout. Installed Google Chrome is not supported."
+                    ? "Choose the Google Chrome Application folder containing chrome.exe."
                     : "Choose the " + product + " folder. Its main folder or a version folder both work.";
                 if (!String.IsNullOrEmpty(selectedRoot) && Directory.Exists(selectedRoot)) { dialog.SelectedPath = selectedRoot; }
                 if (dialog.ShowDialog(this) != DialogResult.OK) { return false; }
                 try
                 {
-                    selectedRoot = AutoSetup.Resolve(product, dialog.SelectedPath);
+                    selectedRoot = product == Product.Chrome
+                        ? ChromeRuntimeProfile.Resolve(dialog.SelectedPath, CancellationToken.None)
+                        : AutoSetup.Resolve(product, dialog.SelectedPath);
                     UpdateReadyState();
                     return true;
                 }
@@ -319,15 +364,70 @@ namespace Tawop
         {
             if (busy) { return; }
             finished = false;
+            detecting = false;
+            stopping = false;
+            closeWhenFinished = false;
+            operationCancellation = new CancellationTokenSource();
             SetBusy(true);
-            start.Text = restore ? "Undoing changes..." : "Working...";
+            start.Text = "Stop";
             status.Text = "Checking the installation. Please wait.";
-            worker.RunWorkerAsync(new object[] { selectedRoot, restore });
+            worker.RunWorkerAsync(new object[] { selectedRoot, restore, false, operationCancellation.Token });
+        }
+        private void BeginDetection()
+        {
+            if (busy) { return; }
+            detecting = true;
+            stopping = false;
+            closeWhenFinished = false;
+            operationCancellation = new CancellationTokenSource();
+            SetBusy(true);
+            start.Text = "Stop";
+            status.Text = "Finding the installation. You can stop this search.";
+            worker.RunWorkerAsync(new object[] { null, false, true, operationCancellation.Token });
+        }
+        private void RequestStop(bool closeAfter)
+        {
+            closeWhenFinished = closeWhenFinished || closeAfter;
+            if (!busy || stopping) { return; }
+            stopping = true;
+            start.Text = "Stopping safely...";
+            start.Enabled = false;
+            status.Text = "Stopping safely. Finishing the current change or restoring the backup...";
+            operationCancellation.Cancel();
         }
         private void Complete(object sender, RunWorkerCompletedEventArgs e)
         {
+            bool wasDetecting = detecting;
+            detecting = false;
+            stopping = false;
+            if (operationCancellation != null)
+            {
+                operationCancellation.Dispose();
+                operationCancellation = null;
+            }
             SetBusy(false);
-            if (e.Error != null) { ShowFailure(e.Error); return; }
+            if (e.Error != null)
+            {
+                closeWhenFinished = false;
+                ShowFailure(e.Error);
+                return;
+            }
+            if (e.Cancelled)
+            {
+                UpdateReadyState();
+                status.Text = "Stopped. Any remaining backup is kept for Undo changes.";
+                details.Text = "The operation stopped at a safe file boundary. No worker is still running.\r\n"
+                    + "If Undo was stopped partway through, use Undo changes again to finish restoration.";
+                if (closeWhenFinished) { Close(); }
+                return;
+            }
+            if (wasDetecting)
+            {
+                selectedRoot = e.Result as string;
+                UpdateReadyState();
+                if (closeWhenFinished) { Close(); }
+                return;
+            }
             AutoSetupResult result = (AutoSetupResult)e.Result;
             selectedRoot = result.Root;
             finished = true;
@@ -348,6 +448,7 @@ namespace Tawop
                 if (!String.IsNullOrEmpty(result.Inspection.BackupPath)) { text.AppendLine("Backup: " + result.Inspection.BackupPath); }
             }
             details.Text = text.ToString();
+            if (closeWhenFinished) { Close(); }
         }
         private void ShowFailure(Exception error)
         {
@@ -367,7 +468,11 @@ namespace Tawop
             else if (IsMissingFileError(error))
             {
                 status.Text = "A required file is missing. Choose the complete "
-                    + (product == Product.Chrome ? "Chromium source" : product.ToString()) + " folder and try again.";
+                    + product + " folder and try again.";
+            }
+            else if (product == Product.Chrome && message.IndexOf("polic", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                status.Text = "Chrome's performance policies could not be changed. Open Details for the reason.";
             }
             else if (message.IndexOf("tray", StringComparison.OrdinalIgnoreCase) >= 0 || message.IndexOf("Quit", StringComparison.OrdinalIgnoreCase) >= 0)
             {
@@ -399,14 +504,19 @@ namespace Tawop
         private void SetBusy(bool value)
         {
             busy = value;
-            start.Enabled = !value;
+            start.Enabled = !stopping;
+            start.AccessibleName = value ? "Stop the current operation" : "Start automatic setup";
             choose.Enabled = !value;
             undo.Enabled = !value && HasBackup();
-            UseWaitCursor = value;
+            UseWaitCursor = false;
         }
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { worker.Dispose(); }
+            if (disposing)
+            {
+                if (operationCancellation != null) { operationCancellation.Dispose(); }
+                worker.Dispose();
+            }
             base.Dispose(disposing);
         }
     }

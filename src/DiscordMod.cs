@@ -15,6 +15,7 @@ namespace Tawop
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
         public static List<PatchEdit> Prepare(string installPath, string assetsPath)
         {
+            OperationControl.Report("Checking Discord compatibility...");
             string root = ExistingDirectory(installPath);
             string assets = ExistingDirectory(assetsPath);
             VerifyElectronAsarIntegrity(SafePath(root, "Discord.exe"));
@@ -37,6 +38,7 @@ namespace Tawop
             };
             preload = preload.Replace(CssPlaceholder, serializer.Serialize(css));
             var edits = new List<PatchEdit>();
+            OperationControl.Report("Preparing Discord startup resources...");
             string appPath = SafePath(root, "resources/app.asar");
             byte[] appBytes = ReadBytes(appPath, AsarArchive.MaximumArchiveBytes);
             AsarArchive app = AsarArchive.Read(appBytes);
@@ -59,6 +61,7 @@ namespace Tawop
 
             foreach (string candidate in candidates)
             {
+                OperationControl.Report("Preparing Discord client resources...");
                 ExistingDirectory(candidate);
                 string moduleName = Path.GetFileName(candidate);
                 string relative = "modules/" + moduleName + "/discord_desktop_core/core.asar";
@@ -73,6 +76,15 @@ namespace Tawop
                 string original = DecodeSource(core.GetFile("mainScreenPreload.js"), "mainScreenPreload.js");
                 RejectPatched(original, "Discord core");
                 core.SetFile("mainScreenPreload.js", Utf8.GetBytes(original + "\n;\n" + preload + "\n"));
+                OperationControl.Check();
+                if (!core.ContainsFile("bundle.js"))
+                {
+                    throw new InvalidDataException("This Discord core does not contain a supported client engine bundle. No files have been changed.");
+                }
+
+                string bundle = DecodeSource(core.GetFile("bundle.js"), "bundle.js");
+                RejectPatched(bundle, "Discord engine");
+                core.SetFile("bundle.js", Utf8.GetBytes(AggressivePolicy.PatchDiscordBundle(bundle)));
                 edits.Add(new PatchEdit { RelativePath = relative, Content = core.Repack(), ExpectedBeforeHash = ModCore.Hash(coreBytes) });
             }
 
@@ -81,6 +93,7 @@ namespace Tawop
 
         public static void VerifyElectronAsarIntegrity(string exePath)
         {
+            OperationControl.Check();
             EnsureNoReparsePoints(exePath);
             byte[] sentinel = Encoding.ASCII.GetBytes("dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX");
             int[] prefix = new int[sentinel.Length];
@@ -112,6 +125,7 @@ namespace Tawop
                 long fusePosition = -1;
                 while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
                 {
+                    OperationControl.Check();
                     for (int i = 0; i < count; i++)
                     {
                         while (matched > 0 && buffer[i] != sentinel[matched])
@@ -154,6 +168,7 @@ namespace Tawop
 
                 for (int index = 0; index < wireLength; index++)
                 {
+                    OperationControl.Check();
                     int state = stream.ReadByte();
                     if (state != '0' && state != '1' && state != 'r')
                     {
@@ -204,6 +219,7 @@ namespace Tawop
 
         private static byte[] ReadBytes(string path, int maximumBytes)
         {
+            OperationControl.Check();
             EnsureNoReparsePoints(path);
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
@@ -216,7 +232,8 @@ namespace Tawop
                 int offset = 0;
                 while (offset < bytes.Length)
                 {
-                    int count = stream.Read(bytes, offset, bytes.Length - offset);
+                    OperationControl.Check();
+                    int count = stream.Read(bytes, offset, Math.Min(65536, bytes.Length - offset));
                     if (count == 0)
                     {
                         throw new EndOfStreamException("File changed while reading: " + path);

@@ -12,6 +12,7 @@ namespace Tawop
         private const string PrefsPath = "components/performance_manager/user_tuning/prefs.cc";
         public static List<PatchEdit> Prepare(string installPath, string assetsPath)
         {
+            OperationControl.Report("Preparing Chromium memory saver defaults...");
             if (String.IsNullOrWhiteSpace(installPath))
             {
                 throw new ArgumentException("Choose the src folder of a Chromium source checkout.");
@@ -47,6 +48,7 @@ namespace Tawop
             int tawopValues = 0;
             foreach (string key in keys)
             {
+                OperationControl.Check();
                 Regex line = new Regex("^" + Regex.Escape(key) + "=([^\\r\\n]*)(\\r?)$", RegexOptions.Multiline);
                 MatchCollection values = line.Matches(text);
                 if (values.Count != 1)
@@ -141,7 +143,7 @@ namespace Tawop
                 throw new InvalidOperationException("Source file exceeds the expected size: " + relative);
             }
 
-            byte[] bytes = File.ReadAllBytes(full);
+            byte[] bytes = ModCore.ReadFile(full);
             bool bom = bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf;
             int offset = bom ? 3 : 0;
             string text = new UTF8Encoding(false, true).GetString(bytes, offset, bytes.Length - offset);

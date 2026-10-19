@@ -43,16 +43,19 @@ namespace Tawop
         public string CreatedUtc;
         public string BackupDirectory;
         public string Status;
+        public string ProfileVersion;
         public List<PatchRecord> Files = new List<PatchRecord>();
     }
 
     public sealed class PatchInspection
     {
+        internal List<PatchEdit> PreparedEdits;
         public string Product;
         public string Root;
         public string Kind;
         public string Status;
         public string BackupPath;
+        public string ProfileVersion;
         public string MemoryStatus = "Memory savings have not been measured. Functional and performance tests are still required.";
         public List<PatchRecord> Files = new List<PatchRecord>();
     }
@@ -135,7 +138,8 @@ namespace Tawop
             }
             else if (product == Product.Steam)
             {
-                allowed = Regex.IsMatch(normalized, @"^steamui\\css\\[^\\]+\.css$", RegexOptions.IgnoreCase);
+                allowed = Regex.IsMatch(normalized, @"^steamui\\css\\[^\\]+\.css$", RegexOptions.IgnoreCase)
+                    || Regex.IsMatch(normalized, @"^steamui\\(?:sp|chunk~[0-9a-f]{1,32})\.js$", RegexOptions.IgnoreCase);
             }
             else if (product == Product.Discord)
             {
@@ -151,19 +155,68 @@ namespace Tawop
 
     public static class ModCore
     {
+        public const string CurrentProfileVersion = "0.5.0";
         private const int MaximumFiles = 64;
         private const long MaximumFileBytes = 256L * 1024 * 1024;
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
         public static string Hash(byte[] data)
         {
+            using (var input = new MemoryStream(data, false))
+            {
+                return HashStream(input);
+            }
+        }
+
+        public static string Hash(byte[] data, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return Hash(data);
+            }
+        }
+
+        public static string HashFile(string path)
+        {
+            OperationControl.Check();
+            Paths.RejectReparsePoints(path);
+            using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (input.Length > MaximumFileBytes)
+                {
+                    throw new InvalidOperationException("File exceeds the supported size: " + path);
+                }
+
+                return HashStream(input);
+            }
+        }
+
+        internal static string HashStream(Stream input)
+        {
             using (SHA256 hash = SHA256.Create())
             {
-                return BitConverter.ToString(hash.ComputeHash(data)).Replace("-", "");
+                byte[] buffer = new byte[65536];
+                while (true)
+                {
+                    OperationControl.Check();
+                    int count = input.Read(buffer, 0, buffer.Length);
+                    OperationControl.Check();
+                    if (count == 0)
+                    {
+                        break;
+                    }
+
+                    hash.TransformBlock(buffer, 0, count, null, 0);
+                }
+
+                OperationControl.Check();
+                hash.TransformFinalBlock(new byte[0], 0, 0);
+                return BitConverter.ToString(hash.Hash).Replace("-", "");
             }
         }
 
         public static byte[] ReadFile(string path)
         {
+            OperationControl.Check();
             Paths.RejectReparsePoints(path);
             if (!File.Exists(path))
             {
@@ -175,7 +228,38 @@ namespace Tawop
                 throw new InvalidOperationException("File exceeds the supported size: " + path);
             }
 
-            return File.ReadAllBytes(path);
+            using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (input.Length > MaximumFileBytes)
+                {
+                    throw new InvalidOperationException("File exceeds the supported size: " + path);
+                }
+
+                byte[] bytes = new byte[(int)input.Length];
+                int offset = 0;
+                while (offset < bytes.Length)
+                {
+                    OperationControl.Check();
+                    int count = input.Read(bytes, offset, Math.Min(65536, bytes.Length - offset));
+                    if (count == 0)
+                    {
+                        throw new EndOfStreamException("File changed while reading: " + path);
+                    }
+
+                    offset += count;
+                }
+
+                OperationControl.Check();
+                return bytes;
+            }
+        }
+
+        public static byte[] ReadFile(string path, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return ReadFile(path);
+            }
         }
 
         private static JavaScriptSerializer Serializer()
@@ -222,6 +306,7 @@ namespace Tawop
             long total = 0;
             foreach (PatchEdit edit in edits)
             {
+                OperationControl.Check();
                 Paths.ValidateTarget(product, edit.RelativePath);
                 string path = Paths.Child(root, edit.RelativePath);
                 if (!seen.Add(path) || edit.Content == null || edit.Content.LongLength > MaximumFileBytes)
@@ -235,8 +320,7 @@ namespace Tawop
                     throw new InvalidOperationException("Patch plan exceeds the supported size.");
                 }
 
-                ReadFile(path);
-                if (!Regex.IsMatch(edit.ExpectedBeforeHash ?? "", "^[A-F0-9]{64}$") || Hash(ReadFile(path)) != edit.ExpectedBeforeHash)
+                if (!Regex.IsMatch(edit.ExpectedBeforeHash ?? "", "^[A-F0-9]{64}$") || HashFile(path) != edit.ExpectedBeforeHash)
                 {
                     throw new InvalidOperationException("File changed while preparing the patch: " + edit.RelativePath);
                 }
@@ -247,6 +331,7 @@ namespace Tawop
 
         public static PatchInspection Inspect(Product product, string installPath, string assetsPath)
         {
+            OperationControl.Check();
             string root = Paths.Root(installPath);
             string active = ActivePath(root, product);
             if (File.Exists(active))
@@ -257,7 +342,8 @@ namespace Tawop
                 {
                     foreach (PatchRecord record in journal.Files)
                     {
-                        if (!File.Exists(Paths.Child(root, record.RelativePath)) || Hash(ReadFile(Paths.Child(root, record.RelativePath))) != record.AfterHash)
+                        OperationControl.Check();
+                        if (!File.Exists(Paths.Child(root, record.RelativePath)) || HashFile(Paths.Child(root, record.RelativePath)) != record.AfterHash)
                         {
                             status = "Patch changed by an update or another tool";
                             break;
@@ -271,6 +357,7 @@ namespace Tawop
                     Root = root,
                     Kind = Kind(product),
                     Status = DisplayStatus(status),
+                    ProfileVersion = journal.ProfileVersion,
                     BackupPath = active,
                     Files = journal.Files
                 };
@@ -282,12 +369,15 @@ namespace Tawop
                 Product = product.ToString(),
                 Root = root,
                 Kind = Kind(product),
-                Status = "Ready; changes have not been applied"
+                Status = "Ready; changes have not been applied",
+                PreparedEdits = edits
             };
             foreach (PatchEdit edit in edits)
             {
-                byte[] before = ReadFile(Paths.Child(root, edit.RelativePath));
-                if (Hash(before) != edit.ExpectedBeforeHash)
+                OperationControl.Check();
+                string target = Paths.Child(root, edit.RelativePath);
+                string beforeHash = HashFile(target);
+                if (beforeHash != edit.ExpectedBeforeHash)
                 {
                     throw new InvalidOperationException("File changed during inspection.");
                 }
@@ -295,14 +385,23 @@ namespace Tawop
                 report.Files.Add(new PatchRecord
                 {
                     RelativePath = edit.RelativePath,
-                    BeforeHash = Hash(before),
+                    BeforeHash = beforeHash,
                     AfterHash = Hash(edit.Content),
-                    BeforeBytes = before.LongLength,
+                    BeforeBytes = new FileInfo(target).Length,
                     AfterBytes = edit.Content.LongLength
                 });
             }
 
             return report;
+        }
+
+        public static PatchInspection Inspect(Product product, string installPath, string assetsPath,
+            CancellationToken cancellation, Action<string> progress)
+        {
+            using (OperationControl.Enter(cancellation, progress))
+            {
+                return Inspect(product, installPath, assetsPath);
+            }
         }
 
         private static string Kind(Product product)
@@ -390,6 +489,21 @@ namespace Tawop
 
         public static PatchInspection Apply(Product product, string installPath, string assetsPath)
         {
+            return ApplyPrepared(product, installPath, assetsPath, null);
+        }
+
+        public static PatchInspection Apply(Product product, string installPath, string assetsPath,
+            CancellationToken cancellation, Action<string> progress)
+        {
+            using (OperationControl.Enter(cancellation, progress))
+            {
+                return Apply(product, installPath, assetsPath);
+            }
+        }
+
+        internal static PatchInspection ApplyPrepared(Product product, string installPath, string assetsPath, PatchInspection prepared)
+        {
+            OperationControl.Check();
             string root = Paths.Root(installPath);
             using (PatchLock guard = new PatchLock(root, product))
             {
@@ -400,65 +514,92 @@ namespace Tawop
                     throw new InvalidOperationException("A backup is already active. Undo the changes before applying again.");
                 }
 
-                List<PatchEdit> edits = Prepare(product, root, assetsPath);
+                List<PatchEdit> edits = null;
+                if (prepared != null && prepared.Product == product.ToString()
+                    && String.Equals(prepared.Root, root, StringComparison.OrdinalIgnoreCase))
+                {
+                    edits = prepared.PreparedEdits;
+                    prepared.PreparedEdits = null;
+                }
+
+                if (edits == null)
+                {
+                    edits = Prepare(product, root, assetsPath);
+                }
+
+                OperationControl.Check();
                 PatchJournal journal = new PatchJournal
                 {
                     Product = product.ToString(),
+                    ProfileVersion = CurrentProfileVersion,
                     InstallRoot = root,
                     CreatedUtc = DateTime.UtcNow.ToString("o"),
                     BackupDirectory = @".tawop\" + product.ToString().ToLowerInvariant() + "-" + Guid.NewGuid().ToString("N"),
                     Status = "Preparando"
                 };
                 string backupDirectory = Paths.Child(root, journal.BackupDirectory);
-                Directory.CreateDirectory(backupDirectory);
-                foreach (PatchEdit edit in edits)
+                try
                 {
-                    byte[] before = ReadFile(Paths.Child(root, edit.RelativePath));
-                    if (Hash(before) != edit.ExpectedBeforeHash)
+                    Directory.CreateDirectory(backupDirectory);
+                    foreach (PatchEdit edit in edits)
                     {
-                        throw new InvalidOperationException("File changed before creating its backup.");
+                        OperationControl.Report("Saving backup " + (journal.Files.Count + 1) + " of " + edits.Count + "...");
+                        byte[] before = ReadFile(Paths.Child(root, edit.RelativePath));
+                        if (Hash(before) != edit.ExpectedBeforeHash)
+                        {
+                            throw new InvalidOperationException("File changed before creating its backup.");
+                        }
+
+                        string name = journal.Files.Count.ToString("D4") + ".bin";
+                        string backupFile = Paths.Child(backupDirectory, name);
+                        using (FileStream stream = new FileStream(backupFile, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        {
+                            WriteChunks(stream, before);
+                            stream.Flush(true);
+                        }
+
+                        journal.Files.Add(new PatchRecord
+                        {
+                            RelativePath = edit.RelativePath,
+                            BeforeHash = Hash(before),
+                            AfterHash = Hash(edit.Content),
+                            BeforeBytes = before.LongLength,
+                            AfterBytes = edit.Content.LongLength,
+                            BackupFile = name
+                        });
                     }
 
-                    string name = journal.Files.Count.ToString("D4") + ".bin";
-                    string backupFile = Paths.Child(backupDirectory, name);
-                    using (FileStream stream = new FileStream(backupFile, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                    {
-                        stream.Write(before, 0, before.Length);
-                        stream.Flush(true);
-                    }
-
-                    journal.Files.Add(new PatchRecord
-                    {
-                        RelativePath = edit.RelativePath,
-                        BeforeHash = Hash(before),
-                        AfterHash = Hash(edit.Content),
-                        BeforeBytes = before.LongLength,
-                        AfterBytes = edit.Content.LongLength,
-                        BackupFile = name
-                    });
+                    journal.Status = "Aplicando; respaldo recuperable";
+                    OperationControl.Check();
+                    SaveJournal(active, journal);
+                }
+                catch
+                {
+                    DiscardUncommittedBackups(backupDirectory, active);
+                    throw;
                 }
 
-                journal.Status = "Aplicando; respaldo recuperable";
-                SaveJournal(active, journal);
                 try
                 {
                     for (int i = 0; i < edits.Count; i++)
                     {
+                        OperationControl.Report("Applying file " + (i + 1) + " of " + edits.Count + "...");
                         EnsureClosed(product, root);
                         string target = Paths.Child(root, edits[i].RelativePath);
-                        if (Hash(ReadFile(target)) != journal.Files[i].BeforeHash)
+                        if (HashFile(target) != journal.Files[i].BeforeHash)
                         {
                             throw new InvalidOperationException("Client files changed while preparing the patch: " + edits[i].RelativePath);
                         }
 
                         ReplaceClientFile(product, root, target, edits[i].Content, journal.Files[i].BeforeHash);
-                        if (Hash(ReadFile(target)) != journal.Files[i].AfterHash)
+                        if (HashFile(target) != journal.Files[i].AfterHash)
                         {
                             throw new InvalidOperationException("Could not verify " + edits[i].RelativePath);
                         }
                     }
 
                     journal.Status = "Aplicado";
+                    OperationControl.Check();
                     SaveJournal(active, journal);
                     return new PatchInspection
                     {
@@ -466,44 +607,65 @@ namespace Tawop
                         Root = root,
                         Kind = Kind(product),
                         Status = DisplayStatus(journal.Status),
+                        ProfileVersion = journal.ProfileVersion,
                         BackupPath = active,
                         Files = journal.Files
                     };
                 }
                 catch (Exception applyError)
                 {
-                    journal.Status = "Aplicación interrumpida";
-                    string journalWarning = "";
-                    try
+                    OperationControl.Recovery(applyError is OperationCanceledException
+                        ? "Restoring originals before stopping..." : "Restoring originals after an incomplete operation...");
+                    using (OperationControl.Enter(CancellationToken.None, null))
                     {
-                        SaveJournal(active, journal);
-                    }
-                    catch (Exception journalError)
-                    {
-                        journalWarning = " / Backup status: " + journalError.Message;
-                    }
+                        journal.Status = "Aplicación interrumpida";
+                        string journalWarning = "";
+                        try
+                        {
+                            SaveJournal(active, journal);
+                        }
+                        catch (Exception journalError)
+                        {
+                            journalWarning = " / Backup status: " + journalError.Message;
+                        }
 
-                    try
-                    {
-                        RestoreCore(product, root);
-                    }
-                    catch (Exception rollbackError)
-                    {
-                        throw new InvalidOperationException("Could not apply changes. Keep the backup and use Undo changes. " + applyError.Message + " / " + rollbackError.Message + journalWarning, applyError);
-                    }
+                        try
+                        {
+                            RestoreCore(product, root);
+                        }
+                        catch (Exception rollbackError)
+                        {
+                            throw new InvalidOperationException("Could not apply changes. Keep the backup and use Undo changes. " + applyError.Message + " / " + rollbackError.Message + journalWarning, applyError);
+                        }
 
-                    throw new InvalidOperationException("Changes could not be completed. Original files were restored. " + applyError.Message, applyError);
+                        if (applyError is OperationCanceledException)
+                        {
+                            throw new OperationCanceledException("Stopped safely. Original files were restored.", applyError);
+                        }
+
+                        throw new InvalidOperationException("Changes could not be completed. Original files were restored. " + applyError.Message, applyError);
+                    }
                 }
             }
         }
 
         public static PatchInspection Restore(Product product, string installPath)
         {
+            OperationControl.Check();
             string root = Paths.Root(installPath);
             using (PatchLock guard = new PatchLock(root, product))
             {
                 EnsureClosed(product, root);
                 return RestoreCore(product, root);
+            }
+        }
+
+        public static PatchInspection Restore(Product product, string installPath,
+            CancellationToken cancellation, Action<string> progress)
+        {
+            using (OperationControl.Enter(cancellation, progress))
+            {
+                return Restore(product, installPath);
             }
         }
 
@@ -536,6 +698,7 @@ namespace Tawop
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (PatchRecord record in journal.Files)
             {
+                OperationControl.Check();
                 Paths.ValidateTarget(product, record.RelativePath);
                 if (!seen.Add(Paths.Child(root, record.RelativePath)) ||
                     !Regex.IsMatch(record.BackupFile ?? "", @"^[0-9]{4}\.bin$") ||
@@ -545,7 +708,7 @@ namespace Tawop
                     throw new InvalidOperationException("Invalid backup entry.");
                 }
 
-                if (Hash(ReadFile(Paths.Child(backup, record.BackupFile))) != record.BeforeHash)
+                if (HashFile(Paths.Child(backup, record.BackupFile)) != record.BeforeHash)
                 {
                     throw new InvalidOperationException("Backup data is damaged: " + record.RelativePath);
                 }
@@ -562,8 +725,9 @@ namespace Tawop
             List<string> conflicts = new List<string>();
             foreach (PatchRecord record in journal.Files)
             {
+                OperationControl.Report("Restoring " + Path.GetFileName(record.RelativePath) + "...");
                 string target = Paths.Child(root, record.RelativePath);
-                string current = Hash(ReadFile(target));
+                string current = HashFile(target);
                 if (record.Restored)
                 {
                     if (current != record.BeforeHash)
@@ -583,13 +747,18 @@ namespace Tawop
                         throw new InvalidOperationException("Backup data changed during restoration.");
                     }
 
-                    ReplaceClientFile(product, root, target, before, record.AfterHash);
-                    if (Hash(ReadFile(target)) != record.BeforeHash)
+                    OperationControl.Check();
+                    using (OperationControl.Enter(CancellationToken.None, null))
                     {
-                        throw new InvalidOperationException("Could not restore " + record.RelativePath);
-                    }
+                        ReplaceClientFile(product, root, target, before, record.AfterHash);
+                        if (HashFile(target) != record.BeforeHash)
+                        {
+                            throw new InvalidOperationException("Could not restore " + record.RelativePath);
+                        }
 
-                    record.Restored = true;
+                        record.Restored = true;
+                        SaveJournal(active, journal);
+                    }
                 }
                 else if (current == record.BeforeHash)
                 {
@@ -601,6 +770,7 @@ namespace Tawop
                 }
 
                 SaveJournal(active, journal);
+                OperationControl.Check();
             }
 
             if (conflicts.Count > 0)
@@ -621,6 +791,7 @@ namespace Tawop
                 Root = root,
                 Kind = Kind(product),
                 Status = DisplayStatus(journal.Status),
+                ProfileVersion = journal.ProfileVersion,
                 BackupPath = archive,
                 Files = journal.Files
             };
@@ -630,6 +801,41 @@ namespace Tawop
         {
             Directory.CreateDirectory(Path.GetDirectoryName(active));
             AtomicWrite(active, Utf8.GetBytes(Json(journal)));
+        }
+
+        private static void DiscardUncommittedBackups(string directory, string active)
+        {
+            if (File.Exists(active) || !Directory.Exists(directory))
+            {
+                return;
+            }
+
+            try
+            {
+                Paths.RejectReparsePoints(directory);
+                foreach (string file in Directory.GetFiles(directory, "*", SearchOption.TopDirectoryOnly))
+                {
+                    if (Regex.IsMatch(Path.GetFileName(file), @"^[0-9]{4}\.bin$"))
+                    {
+                        Paths.RejectReparsePoints(file);
+                        File.Delete(file);
+                    }
+                }
+
+                if (Directory.GetFileSystemEntries(directory).Length == 0)
+                {
+                    Directory.Delete(directory);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         public static void AtomicWrite(string path, byte[] content)
@@ -642,8 +848,9 @@ namespace Tawop
             AtomicWriteCore(path, content, delegate
             {
                 EnsureClosed(product, root);
+                OperationControl.Check();
                 Paths.RejectReparsePoints(path);
-                if (Hash(ReadFile(path)) != expectedHash)
+                if (HashFile(path) != expectedHash)
                 {
                     throw new InvalidOperationException("File changed before replacement: " + Path.GetFileName(path));
                 }
@@ -652,13 +859,14 @@ namespace Tawop
 
         private static void AtomicWriteCore(string path, byte[] content, Action beforeReplace)
         {
+            OperationControl.Check();
             Paths.RejectReparsePoints(path);
             string temporary = path + ".tawop-" + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
                 using (FileStream stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    stream.Write(content, 0, content.Length);
+                    WriteChunks(stream, content);
                     stream.Flush(true);
                 }
 
@@ -667,6 +875,7 @@ namespace Tawop
                     beforeReplace();
                 }
 
+                OperationControl.Check();
                 if (File.Exists(path))
                 {
                     File.Replace(temporary, path, null);
@@ -682,6 +891,15 @@ namespace Tawop
                 {
                     File.Delete(temporary);
                 }
+            }
+        }
+
+        private static void WriteChunks(Stream output, byte[] content)
+        {
+            for (int offset = 0; offset < content.Length; offset += 65536)
+            {
+                OperationControl.Check();
+                output.Write(content, offset, Math.Min(65536, content.Length - offset));
             }
         }
 

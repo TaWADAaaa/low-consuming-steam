@@ -10,7 +10,7 @@ namespace Tawop
     public static class AssetStore
     {
         private const int MaximumAssetBytes = 1024 * 1024;
-        private const string BundleVersion = "0.4.0";
+        private const string BundleVersion = "0.5.0";
         private static readonly string[] RelativePaths =
         {
             "discord/tawop.css",
@@ -20,6 +20,7 @@ namespace Tawop
 
         public static string ResolveDirectory(string packageRoot)
         {
+            OperationControl.Check();
             string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (String.IsNullOrWhiteSpace(localData))
             {
@@ -30,8 +31,17 @@ namespace Tawop
             return ResolveDirectory(packageRoot, cacheRoot, Assembly.GetExecutingAssembly());
         }
 
+        public static string ResolveDirectory(string packageRoot, CancellationToken cancellation)
+        {
+            using (OperationControl.Enter(cancellation, null))
+            {
+                return ResolveDirectory(packageRoot);
+            }
+        }
+
         internal static string ResolveDirectory(string packageRoot, string cacheRoot, Assembly assetAssembly)
         {
+            OperationControl.Check();
             if (String.IsNullOrWhiteSpace(packageRoot) || String.IsNullOrWhiteSpace(cacheRoot) || assetAssembly == null)
             {
                 throw new ArgumentException("Package and cache folders and the resource assembly are required.");
@@ -63,7 +73,13 @@ namespace Tawop
                 {
                     try
                     {
-                        acquired = bundleLock.WaitOne(10000);
+                        int selected = WaitHandle.WaitAny(new WaitHandle[] { bundleLock, OperationControl.Token.WaitHandle }, 10000);
+                        if (selected == 1)
+                        {
+                            OperationControl.Check();
+                        }
+
+                        acquired = selected == 0;
                     }
                     catch (AbandonedMutexException)
                     {
@@ -80,6 +96,7 @@ namespace Tawop
                     CreatePlainDirectory(bundleDirectory);
                     foreach (EmbeddedAsset asset in assets)
                     {
+                        OperationControl.Check();
                         string target = Paths.Child(bundleDirectory, asset.RelativePath);
                         CreatePlainDirectory(Path.GetDirectoryName(target));
                         WriteOrVerify(target, asset);
@@ -87,6 +104,7 @@ namespace Tawop
 
                     foreach (EmbeddedAsset asset in assets)
                     {
+                        OperationControl.Check();
                         VerifyCachedFile(Paths.Child(bundleDirectory, asset.RelativePath), asset.Hash);
                     }
 
@@ -111,6 +129,7 @@ namespace Tawop
 
             foreach (string relative in RelativePaths)
             {
+                OperationControl.Check();
                 string path = Paths.Child(directory, relative);
                 if (!File.Exists(path))
                 {
@@ -124,6 +143,7 @@ namespace Tawop
             List<EmbeddedAsset> assets = new List<EmbeddedAsset>();
             foreach (string relative in RelativePaths)
             {
+                OperationControl.Check();
                 string resourceName = "Tawop.Assets." + relative.Replace('/', '.');
                 using (Stream stream = assembly.GetManifestResourceStream(resourceName))
                 {
@@ -153,6 +173,7 @@ namespace Tawop
                 int count;
                 while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
                 {
+                    OperationControl.Check();
                     if (output.Length + count > MaximumAssetBytes)
                     {
                         throw new InvalidDataException("A bundled resource exceeds the 1 MiB limit: " + name);
