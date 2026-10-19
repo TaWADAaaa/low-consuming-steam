@@ -1,0 +1,72 @@
+:root {
+  --tawop-mod-version: "TAWOP_MOD_V3";
+  --tawop-background: #080d0b;
+  --tawop-surface: #101e17;
+  --tawop-foreground: #e4f5eb;
+  --tawop-accent: #6affab;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #080d0b !important;
+  background-image: none !important;
+  color: #e4f5eb !important;
+}
+
+button,
+input,
+select,
+textarea {
+  background-color: #101e17 !important;
+  color: #e4f5eb !important;
+  border-color: #3b7954 !important;
+}
+
+a {
+  color: #7ce8a6 !important;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #6affab;
+}
+
+.OpenGraphImgBackground,
+.gameInviteMsg .productImage.productImageBlur,
+.broadcastInviteMsg .productImage.productImageBlur,
+.broadcastViewRequestMsg .productImage.productImageBlur,
+.playtestInviteMsg .productImage.productImageBlur,
+.Throbber_Blur {
+  display: none !important;
+  background: transparent !important;
+}
+
+._DialogRow._DialogRowBackground {
+  background: #101e17 !important;
+}
+
+*,
+*::before,
+*::after {
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+*:focus-visible,
+.gpfocus {
+  outline: 2px solid #6affab !important;
+  outline-offset: 2px !important;
+}
+
+@media (forced-colors: active) {
+  *:focus-visible,
+  .gpfocus {
+    outline-color: Highlight !important;
+  }
+}
