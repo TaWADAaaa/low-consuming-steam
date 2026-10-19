@@ -15,10 +15,15 @@
     return video.currentSrc || video.src || "";
   }
 
-  function pauseLoop(video) {
-    if (!document.hidden || !isBackgroundLoop(video) || video.paused) return;
+  function isDecoration(video) {
+    return video && typeof video.closest === "function" && Boolean(video.closest(
+      ".avatarDecoration__44b0c, .avatarDecoration_c19a55, .profileEffects__0dd08"));
+  }
 
-    pausedVideos.set(video, sourceOf(video));
+  function pauseLoop(video) {
+    if ((!document.hidden && !isDecoration(video)) || !isBackgroundLoop(video) || video.paused) return;
+
+    if (!isDecoration(video)) pausedVideos.set(video, sourceOf(video));
     try {
       video.pause();
     } catch (_) {
@@ -28,16 +33,14 @@
 
   function onVisibility() {
     var videos = document.querySelectorAll("video[autoplay][loop]");
-    if (document.hidden) {
-      for (var i = 0; i < videos.length; i++) pauseLoop(videos[i]);
-      return;
-    }
+    for (var i = 0; i < videos.length; i++) pauseLoop(videos[i]);
+    if (document.hidden) return;
 
     var pending = pausedVideos;
     pausedVideos = new WeakMap();
     for (var j = 0; j < videos.length; j++) {
       var video = videos[j];
-      if (!pending.has(video) || !isBackgroundLoop(video) || !video.paused ||
+      if (!pending.has(video) || !isBackgroundLoop(video) || isDecoration(video) || !video.paused ||
           pending.get(video) !== sourceOf(video)) continue;
 
       try {
@@ -58,6 +61,9 @@
     document.documentElement.setAttribute("data-tawop-version", tawopModVersion);
     document.addEventListener("visibilitychange", onVisibility);
     document.addEventListener("play", function (event) {
+      pauseLoop(event.target);
+    }, true);
+    document.addEventListener("loadedmetadata", function (event) {
       pauseLoop(event.target);
     }, true);
     onVisibility();
