@@ -14,7 +14,7 @@ namespace Tawop
         {
             if (String.IsNullOrWhiteSpace(installPath))
             {
-                throw new ArgumentException("Selecciona la raiz src de un checkout de Chromium.");
+                throw new ArgumentException("Choose the src folder of a Chromium source checkout.");
             }
 
             string root = Path.GetFullPath(installPath);
@@ -51,7 +51,7 @@ namespace Tawop
                 MatchCollection values = line.Matches(text);
                 if (values.Count != 1)
                 {
-                    throw new InvalidOperationException("BRANDING no compatible: se esperaba una única clave " + key + ".");
+                    throw new InvalidOperationException("Unsupported BRANDING file: expected one " + key + ".");
                 }
 
                 string expected = key.IndexOf("INSTALLER", StringComparison.Ordinal) >= 0 ? "ChromeTawop Installer" : "ChromeTawop";
@@ -63,7 +63,7 @@ namespace Tawop
 
             if (tawopValues != 0 && tawopValues != keys.Length)
             {
-                throw new InvalidOperationException("BRANDING contiene una modificación Tawop incompleta. Restaurá los originales antes de continuar.");
+                throw new InvalidOperationException("BRANDING contains an incomplete patch. Undo the changes before continuing.");
             }
 
             return tawopValues == keys.Length;
@@ -75,7 +75,7 @@ namespace Tawop
             MatchCollection found = line.Matches(text);
             if (found.Count != 1)
             {
-                throw new InvalidOperationException("BRANDING no compatible: se esperaba una unica clave " + key + ".");
+                throw new InvalidOperationException("Unsupported BRANDING file: expected one " + key + ".");
             }
 
             string value = found[0].Groups[2].Value;
@@ -86,7 +86,7 @@ namespace Tawop
 
             if (value != original)
             {
-                throw new InvalidOperationException("BRANDING ya tiene otro valor para " + key + ". Se conserva sin cambios.");
+                throw new InvalidOperationException("BRANDING already has a different value for " + key + ". It was left unchanged.");
             }
 
             return line.Replace(text, delegate (Match match)
@@ -102,7 +102,7 @@ namespace Tawop
             MatchCollection found = registration.Matches(text);
             if (found.Count != 1)
             {
-                throw new InvalidOperationException("Fuente Chromium no compatible: registro ambiguo o ausente de " + preference + ".");
+                throw new InvalidOperationException("Unsupported Chromium source: ambiguous or missing registration for " + preference + ".");
             }
 
             string current = found[0].Groups[2].Value;
@@ -110,7 +110,7 @@ namespace Tawop
             {
                 if (current != replacement)
                 {
-                    throw new InvalidOperationException("La marca Tawop no coincide con " + preference + ". No se aplican cambios.");
+                    throw new InvalidOperationException("The patched branding does not match " + preference + ". Nothing was changed.");
                 }
 
                 return text;
@@ -118,7 +118,7 @@ namespace Tawop
 
             if (current != original)
             {
-                throw new InvalidOperationException("El valor predeterminado de " + preference + " cambio en esta version. Se conserva sin cambios.");
+                throw new InvalidOperationException("The default for " + preference + " changed in this version. It was left unchanged.");
             }
 
             return registration.Replace(text, delegate (Match match)
@@ -132,13 +132,13 @@ namespace Tawop
             string full = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(full))
             {
-                throw new FileNotFoundException("Se requiere el codigo fuente de Chromium, no una instalacion de Google Chrome: " + relative, full);
+                throw new FileNotFoundException("Chromium source code is required. Installed Google Chrome cannot be used: " + relative, full);
             }
 
             FileInfo info = new FileInfo(full);
             if (info.Length > 2 * 1024 * 1024)
             {
-                throw new InvalidOperationException("Fuente inesperadamente grande: " + relative);
+                throw new InvalidOperationException("Source file exceeds the expected size: " + relative);
             }
 
             byte[] bytes = File.ReadAllBytes(full);

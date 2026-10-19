@@ -109,6 +109,7 @@ namespace Tawop
                 byte[] buffer = new byte[65536];
                 int matched = 0;
                 int count;
+                long fusePosition = -1;
                 while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
                 {
                     for (int i = 0; i < count; i++)
@@ -128,29 +129,46 @@ namespace Tawop
                             continue;
                         }
 
-                        stream.Position = stream.Position - count + i + 1;
-                        int version = stream.ReadByte();
-                        int wireLength = stream.ReadByte();
-                        if (version != 1 || wireLength < 5 || wireLength > 64 || stream.Length - stream.Position < wireLength)
+                        if (fusePosition >= 0)
                         {
-                            throw new InvalidDataException("Unsupported Electron fuse wire. No files have been changed.");
+                            throw new InvalidDataException("Discord has more than one Electron fuse wire. This application build is not supported. No files have been changed.");
                         }
 
-                        for (int index = 0; index < wireLength; index++)
-                        {
-                            int state = stream.ReadByte();
-                            if (index == 4 && state != '0')
-                            {
-                                throw new InvalidOperationException("Discord requires embedded ASAR integrity validation or has an unknown fuse state. This patcher will not modify its executable or bypass validation.");
-                            }
-                        }
+                        fusePosition = stream.Position - count + i + 1;
+                        matched = prefix[matched - 1];
+                    }
+                }
 
-                        return;
+                if (fusePosition < 0)
+                {
+                    throw new InvalidDataException("Discord's application could not be verified. The Discord.exe in the parent folder may be its updater. Use automatic detection to find the installed application. No files have been changed.");
+                }
+
+                stream.Position = fusePosition;
+                int version = stream.ReadByte();
+                int wireLength = stream.ReadByte();
+                if (version != 1 || wireLength < 5 || stream.Length - stream.Position < wireLength)
+                {
+                    throw new InvalidDataException("This Discord version has an unsupported Electron fuse wire. No files have been changed.");
+                }
+
+                for (int index = 0; index < wireLength; index++)
+                {
+                    int state = stream.ReadByte();
+                    if (state != '0' && state != '1' && state != 'r')
+                    {
+                        throw new InvalidDataException("Discord has an unknown Electron fuse state. No files have been changed.");
+                    }
+
+                    if (index == 4 && state != '0')
+                    {
+                        string reason = state == '1'
+                            ? "This Discord version protects its application files with embedded ASAR validation."
+                            : "Discord's application-file protection setting is unsupported.";
+                        throw new InvalidOperationException(reason + " Automatic setup cannot apply this patch safely. No files have been changed.");
                     }
                 }
             }
-
-            throw new InvalidDataException("Electron fuse wire was not found. No files have been changed.");
         }
 
         private static void RejectPatched(string original, string label)

@@ -53,7 +53,7 @@ namespace Tawop
         public string Kind;
         public string Status;
         public string BackupPath;
-        public string MemoryStatus = "Sin ahorro de RAM demostrado. Requiere benchmark y pruebas de funciones.";
+        public string MemoryStatus = "Memory savings have not been measured. Functional and performance tests are still required.";
         public List<PatchRecord> Files = new List<PatchRecord>();
     }
 
@@ -63,18 +63,18 @@ namespace Tawop
         {
             if (String.IsNullOrWhiteSpace(path))
             {
-                throw new InvalidOperationException("Elegí una carpeta de instalación o de fuentes Chromium.");
+                throw new InvalidOperationException("Choose an installation folder or a Chromium source folder.");
             }
 
             string root = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (!Directory.Exists(root))
             {
-                throw new DirectoryNotFoundException("La carpeta no existe: " + root);
+                throw new DirectoryNotFoundException("Folder not found: " + root);
             }
 
             if (Path.GetPathRoot(root).TrimEnd('\\', '/') == root)
             {
-                throw new InvalidOperationException("No uses la raíz del disco como instalación.");
+                throw new InvalidOperationException("Choose the application folder, not the root of a drive.");
             }
 
             RejectReparsePoints(root);
@@ -85,21 +85,21 @@ namespace Tawop
         {
             if (String.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0 || relative.IndexOf('\0') >= 0)
             {
-                throw new InvalidOperationException("Ruta relativa inválida.");
+                throw new InvalidOperationException("Invalid relative path.");
             }
 
             foreach (string part in relative.Replace('/', '\\').Split('\\'))
             {
                 if (part.Length == 0 || part == "." || part == "..")
                 {
-                    throw new InvalidOperationException("Ruta fuera del proyecto.");
+                    throw new InvalidOperationException("Path is outside the project.");
                 }
             }
 
             string full = Path.GetFullPath(Path.Combine(root, relative));
             if (!IsInside(root, full))
             {
-                throw new InvalidOperationException("Ruta fuera de la instalación.");
+                throw new InvalidOperationException("Path is outside the installation.");
             }
 
             RejectReparsePoints(full);
@@ -118,7 +118,7 @@ namespace Tawop
             {
                 if ((File.Exists(current) || Directory.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 {
-                    throw new InvalidOperationException("No se admiten enlaces/reparse points: " + current);
+                    throw new InvalidOperationException("Links and reparse points are not supported: " + current);
                 }
 
                 current = Path.GetDirectoryName(current);
@@ -144,7 +144,7 @@ namespace Tawop
 
             if (!allowed)
             {
-                throw new InvalidOperationException("Archivo fuera del alcance del parche: " + relative);
+                throw new InvalidOperationException("File is outside the allowed patch targets: " + relative);
             }
         }
     }
@@ -167,12 +167,12 @@ namespace Tawop
             Paths.RejectReparsePoints(path);
             if (!File.Exists(path))
             {
-                throw new FileNotFoundException("Falta un archivo requerido.", path);
+                throw new FileNotFoundException("A required file is missing.", path);
             }
 
             if (new FileInfo(path).Length > MaximumFileBytes)
             {
-                throw new InvalidOperationException("Archivo demasiado grande: " + path);
+                throw new InvalidOperationException("File exceeds the supported size: " + path);
             }
 
             return File.ReadAllBytes(path);
@@ -215,7 +215,7 @@ namespace Tawop
 
             if (edits == null || edits.Count == 0 || edits.Count > MaximumFiles)
             {
-                throw new InvalidOperationException("Cantidad de archivos inesperada. No se aplicó nada.");
+                throw new InvalidOperationException("Unexpected number of files. Nothing was changed.");
             }
 
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -226,19 +226,19 @@ namespace Tawop
                 string path = Paths.Child(root, edit.RelativePath);
                 if (!seen.Add(path) || edit.Content == null || edit.Content.LongLength > MaximumFileBytes)
                 {
-                    throw new InvalidOperationException("Plan de parche inválido.");
+                    throw new InvalidOperationException("Invalid patch plan.");
                 }
 
                 total += edit.Content.LongLength;
                 if (total > 512L * 1024 * 1024)
                 {
-                    throw new InvalidOperationException("Plan demasiado grande.");
+                    throw new InvalidOperationException("Patch plan exceeds the supported size.");
                 }
 
                 ReadFile(path);
                 if (!Regex.IsMatch(edit.ExpectedBeforeHash ?? "", "^[A-F0-9]{64}$") || Hash(ReadFile(path)) != edit.ExpectedBeforeHash)
                 {
-                    throw new InvalidOperationException("El archivo cambió mientras se preparaba el parche: " + edit.RelativePath);
+                    throw new InvalidOperationException("File changed while preparing the patch: " + edit.RelativePath);
                 }
             }
 
@@ -259,7 +259,7 @@ namespace Tawop
                     {
                         if (!File.Exists(Paths.Child(root, record.RelativePath)) || Hash(ReadFile(Paths.Child(root, record.RelativePath))) != record.AfterHash)
                         {
-                            status = "Parche cambiado por actualización u otra herramienta";
+                            status = "Patch changed by an update or another tool";
                             break;
                         }
                     }
@@ -270,7 +270,7 @@ namespace Tawop
                     Product = product.ToString(),
                     Root = root,
                     Kind = Kind(product),
-                    Status = status,
+                    Status = DisplayStatus(status),
                     BackupPath = active,
                     Files = journal.Files
                 };
@@ -282,14 +282,14 @@ namespace Tawop
                 Product = product.ToString(),
                 Root = root,
                 Kind = Kind(product),
-                Status = "Preparado; todavía no aplicado"
+                Status = "Ready; changes have not been applied"
             };
             foreach (PatchEdit edit in edits)
             {
                 byte[] before = ReadFile(Paths.Child(root, edit.RelativePath));
                 if (Hash(before) != edit.ExpectedBeforeHash)
                 {
-                    throw new InvalidOperationException("El archivo cambió durante la inspección.");
+                    throw new InvalidOperationException("File changed during inspection.");
                 }
 
                 report.Files.Add(new PatchRecord
@@ -307,7 +307,28 @@ namespace Tawop
 
         private static string Kind(Product product)
         {
-            return product == Product.Chrome ? "Parche de fuentes Chromium. El navegador todavía requiere compilación C++." : "Parche local de recursos/código del cliente instalado. Conserva el motor original.";
+            return product == Product.Chrome ? "Chromium source patch. Building the browser still requires a C++ toolchain." : "Local client resource patch. The original client engine is retained.";
+        }
+
+        private static string DisplayStatus(string status)
+        {
+            switch (status)
+            {
+                case "Preparando":
+                    return "Preparing";
+                case "Aplicando; respaldo recuperable":
+                    return "Applying; recovery backup available";
+                case "Aplicado":
+                    return "Applied";
+                case "Aplicación interrumpida":
+                    return "Application interrupted";
+                case "Conflictos; se conservaron los cambios externos":
+                    return "Conflicts; external changes preserved";
+                case "Restaurado":
+                    return "Restored";
+                default:
+                    return status;
+            }
         }
 
         public static void EnsureClosed(Product product, string root)
@@ -355,12 +376,12 @@ namespace Tawop
                         }
                         catch
                         {
-                            throw new InvalidOperationException("No se pudo verificar un proceso de " + product + ". Cerralo o ejecutá con los permisos adecuados.");
+                            throw new InvalidOperationException("Could not verify a running process for " + product + ". Close it or use the required Windows permissions.");
                         }
 
                         if (Paths.IsInside(root, Path.GetFullPath(path)))
                         {
-                            throw new InvalidOperationException("Cerrá " + product + " desde su bandeja antes de aplicar o restaurar. No se cerrará automáticamente.");
+                            throw new InvalidOperationException("Close " + product + " from its tray menu before applying or restoring changes.");
                         }
                     }
                 }
@@ -376,7 +397,7 @@ namespace Tawop
                 string active = ActivePath(root, product);
                 if (File.Exists(active))
                 {
-                    throw new InvalidOperationException("Ya hay un respaldo activo. Restaurá antes de aplicar otra vez.");
+                    throw new InvalidOperationException("A backup is already active. Undo the changes before applying again.");
                 }
 
                 List<PatchEdit> edits = Prepare(product, root, assetsPath);
@@ -395,7 +416,7 @@ namespace Tawop
                     byte[] before = ReadFile(Paths.Child(root, edit.RelativePath));
                     if (Hash(before) != edit.ExpectedBeforeHash)
                     {
-                        throw new InvalidOperationException("El archivo cambió antes del respaldo.");
+                        throw new InvalidOperationException("File changed before creating its backup.");
                     }
 
                     string name = journal.Files.Count.ToString("D4") + ".bin";
@@ -427,13 +448,13 @@ namespace Tawop
                         string target = Paths.Child(root, edits[i].RelativePath);
                         if (Hash(ReadFile(target)) != journal.Files[i].BeforeHash)
                         {
-                            throw new InvalidOperationException("El cliente cambió durante la preparación: " + edits[i].RelativePath);
+                            throw new InvalidOperationException("Client files changed while preparing the patch: " + edits[i].RelativePath);
                         }
 
                         ReplaceClientFile(product, root, target, edits[i].Content, journal.Files[i].BeforeHash);
                         if (Hash(ReadFile(target)) != journal.Files[i].AfterHash)
                         {
-                            throw new InvalidOperationException("No se pudo verificar " + edits[i].RelativePath);
+                            throw new InvalidOperationException("Could not verify " + edits[i].RelativePath);
                         }
                     }
 
@@ -444,7 +465,7 @@ namespace Tawop
                         Product = product.ToString(),
                         Root = root,
                         Kind = Kind(product),
-                        Status = journal.Status,
+                        Status = DisplayStatus(journal.Status),
                         BackupPath = active,
                         Files = journal.Files
                     };
@@ -459,7 +480,7 @@ namespace Tawop
                     }
                     catch (Exception journalError)
                     {
-                        journalWarning = " / Estado del respaldo: " + journalError.Message;
+                        journalWarning = " / Backup status: " + journalError.Message;
                     }
 
                     try
@@ -468,10 +489,10 @@ namespace Tawop
                     }
                     catch (Exception rollbackError)
                     {
-                        throw new InvalidOperationException("Aplicación fallida; conservá el respaldo y usá Restaurar. " + applyError.Message + " / " + rollbackError.Message + journalWarning, applyError);
+                        throw new InvalidOperationException("Could not apply changes. Keep the backup and use Undo changes. " + applyError.Message + " / " + rollbackError.Message + journalWarning, applyError);
                     }
 
-                    throw new InvalidOperationException("No se completó el parche. Se restauraron los archivos. " + applyError.Message, applyError);
+                    throw new InvalidOperationException("Changes could not be completed. Original files were restored. " + applyError.Message, applyError);
                 }
             }
         }
@@ -491,24 +512,24 @@ namespace Tawop
             string active = ActivePath(root, product);
             if (!File.Exists(active))
             {
-                throw new InvalidOperationException("No hay respaldo activo para esta instalación.");
+                throw new InvalidOperationException("There is no active backup for this installation.");
             }
 
             if (new FileInfo(active).Length > 2 * 1024 * 1024)
             {
-                throw new InvalidOperationException("Respaldo inválido.");
+                throw new InvalidOperationException("Invalid backup.");
             }
 
             PatchJournal journal = Serializer().Deserialize<PatchJournal>(Utf8.GetString(File.ReadAllBytes(active)));
             if (journal == null || journal.SchemaVersion != 1 || journal.Product != product.ToString() || !String.Equals(journal.InstallRoot, root, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("El respaldo no corresponde a esta instalación.");
+                throw new InvalidOperationException("The backup belongs to a different installation.");
             }
 
             if (journal.Files == null || journal.Files.Count < 1 || journal.Files.Count > MaximumFiles ||
                 !Regex.IsMatch(journal.BackupDirectory ?? "", @"^\.tawop\\" + product.ToString().ToLowerInvariant() + @"-[a-f0-9]{32}$"))
             {
-                throw new InvalidOperationException("Estructura de respaldo inválida.");
+                throw new InvalidOperationException("Invalid backup structure.");
             }
 
             string backup = Paths.Child(root, journal.BackupDirectory);
@@ -521,12 +542,12 @@ namespace Tawop
                     !Regex.IsMatch(record.BeforeHash ?? "", "^[A-F0-9]{64}$") ||
                     !Regex.IsMatch(record.AfterHash ?? "", "^[A-F0-9]{64}$"))
                 {
-                    throw new InvalidOperationException("Entrada de respaldo inválida.");
+                    throw new InvalidOperationException("Invalid backup entry.");
                 }
 
                 if (Hash(ReadFile(Paths.Child(backup, record.BackupFile))) != record.BeforeHash)
                 {
-                    throw new InvalidOperationException("El respaldo está dañado: " + record.RelativePath);
+                    throw new InvalidOperationException("Backup data is damaged: " + record.RelativePath);
                 }
             }
 
@@ -559,13 +580,13 @@ namespace Tawop
                     byte[] before = ReadFile(Paths.Child(backup, record.BackupFile));
                     if (Hash(before) != record.BeforeHash)
                     {
-                        throw new InvalidOperationException("El respaldo cambió durante la restauración.");
+                        throw new InvalidOperationException("Backup data changed during restoration.");
                     }
 
                     ReplaceClientFile(product, root, target, before, record.AfterHash);
                     if (Hash(ReadFile(target)) != record.BeforeHash)
                     {
-                        throw new InvalidOperationException("No se pudo restaurar " + record.RelativePath);
+                        throw new InvalidOperationException("Could not restore " + record.RelativePath);
                     }
 
                     record.Restored = true;
@@ -586,7 +607,7 @@ namespace Tawop
             {
                 journal.Status = "Conflictos; se conservaron los cambios externos";
                 SaveJournal(active, journal);
-                throw new InvalidOperationException("No se sobrescribieron cambios externos: " + String.Join(", ", conflicts.ToArray()) + ". El respaldo sigue activo.");
+                throw new InvalidOperationException("External changes were preserved: " + String.Join(", ", conflicts.ToArray()) + ". The backup remains active.");
             }
 
             journal.Status = "Restaurado";
@@ -599,7 +620,7 @@ namespace Tawop
                 Product = product.ToString(),
                 Root = root,
                 Kind = Kind(product),
-                Status = journal.Status,
+                Status = DisplayStatus(journal.Status),
                 BackupPath = archive,
                 Files = journal.Files
             };
@@ -624,7 +645,7 @@ namespace Tawop
                 Paths.RejectReparsePoints(path);
                 if (Hash(ReadFile(path)) != expectedHash)
                 {
-                    throw new InvalidOperationException("El archivo cambió antes del reemplazo: " + Path.GetFileName(path));
+                    throw new InvalidOperationException("File changed before replacement: " + Path.GetFileName(path));
                 }
             });
         }
@@ -684,7 +705,7 @@ namespace Tawop
                 if (!acquired)
                 {
                     mutex.Dispose();
-                    throw new InvalidOperationException("Otra instancia está modificando esta instalación.");
+                    throw new InvalidOperationException("Another copy of this tool is modifying this installation.");
                 }
             }
 

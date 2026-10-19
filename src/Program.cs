@@ -7,7 +7,6 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
-using Microsoft.Win32;
 
 #if DISCORD
 [assembly: AssemblyTitle("Low Consuming Discord")]
@@ -16,11 +15,11 @@ using Microsoft.Win32;
 #else
 [assembly: AssemblyTitle("Low Consuming Chrome")]
 #endif
-[assembly: AssemblyDescription("Modificador local / Local patcher. Requiere el cliente original o fuentes Chromium / Original client or Chromium sources required.")]
+[assembly: AssemblyDescription("Simple, reversible local patches. Original client or Chromium sources required.")]
 [assembly: AssemblyCompany("Low Consuming community")]
 [assembly: AssemblyProduct("Low Consuming Tools")]
-[assembly: AssemblyVersion("0.3.0.0")]
-[assembly: AssemblyFileVersion("0.3.0.0")]
+[assembly: AssemblyVersion("0.4.0.0")]
+[assembly: AssemblyFileVersion("0.4.0.0")]
 namespace Tawop
 {
     internal static class Program
@@ -34,108 +33,77 @@ namespace Tawop
 #endif
         internal static string PackageRoot
         {
-            get
-            {
-                return AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
-            }
+            get { return AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/'); }
         }
-
         internal static string AssetsPath
         {
-            get
-            {
-                return AssetStore.ResolveDirectory(PackageRoot);
-            }
+            get { return AssetStore.ResolveDirectory(PackageRoot); }
         }
-
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool AttachConsole(uint processId);
+
         [STAThread]
         private static int Main(string[] args)
         {
-            if (args.Length > 0)
-            {
-                AttachConsole(UInt32.MaxValue);
-                string reportPath = null;
-                bool reportValidated = false;
-                try
-                {
-                    if (args.Length == 1 && args[0] == "--version")
-                    {
-                        Console.WriteLine("Low Consuming " + SelectedProduct + " 0.3.0 (modificador / patcher)");
-                        return 0;
-                    }
-
-                    if (args.Length < 2 || (args[0] != "--inspect" && args[0] != "--apply" && args[0] != "--restore"))
-                    {
-                        throw new ArgumentException("Uso: AppTawop.exe --inspect|--apply|--restore CARPETA [--report ARCHIVO.json]");
-                    }
-
-                    if (args.Length != 2 && (args.Length != 4 || args[2] != "--report"))
-                    {
-                        throw new ArgumentException("Argumentos inválidos.");
-                    }
-
-                    if (args.Length == 4)
-                    {
-                        reportPath = Path.GetFullPath(args[3]);
-                        string selectedRoot = Path.GetFullPath(args[1]).TrimEnd('\\', '/');
-                        Paths.RejectReparsePoints(reportPath);
-                        if (Paths.IsInside(selectedRoot, reportPath) || String.Equals(selectedRoot, reportPath, StringComparison.OrdinalIgnoreCase) || File.Exists(reportPath) || Directory.Exists(reportPath))
-                        {
-                            throw new ArgumentException("El informe debe ser un archivo nuevo fuera de la instalación modificada.");
-                        }
-
-                        reportValidated = true;
-                    }
-
-                    PatchInspection result;
-                    if (args[0] == "--inspect")
-                    {
-                        result = ModCore.Inspect(SelectedProduct, args[1], AssetsPath);
-                    }
-                    else if (args[0] == "--apply")
-                    {
-                        result = ModCore.Apply(SelectedProduct, args[1], AssetsPath);
-                    }
-                    else
-                    {
-                        result = ModCore.Restore(SelectedProduct, args[1]);
-                    }
-                    string json = ModCore.Json(result);
-                    if (reportValidated)
-                    {
-                        WriteNewReport(reportPath, json);
-                    }
-
-                    Console.WriteLine(json);
-                    return 0;
-                }
-                catch (Exception error)
-                {
-                    string json = ModCore.Json(new { Product = SelectedProduct.ToString(), Status = "Error", Error = error.Message });
-                    Console.Error.WriteLine(json);
-                    if (reportValidated)
-                    {
-                        try
-                        {
-                            WriteNewReport(reportPath, json);
-                        }
-                        catch
-                        {
-                        }
-                    }
-
-                    return 1;
-                }
-            }
-
+            if (args.Length > 0) { return RunCommand(args); }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new ModForm(SelectedProduct));
             return 0;
         }
-
+        private static int RunCommand(string[] args)
+        {
+            AttachConsole(UInt32.MaxValue);
+            string reportPath = null;
+            bool reportValidated = false;
+            try
+            {
+                if (args.Length == 1 && args[0] == "--version")
+                {
+                    Console.WriteLine("Low Consuming " + SelectedProduct + " 0.4.0 (local patch tool)");
+                    return 0;
+                }
+                if (args.Length < 2 || (args[0] != "--inspect" && args[0] != "--apply" && args[0] != "--restore"))
+                {
+                    throw new ArgumentException("Usage: AppTawop.exe --inspect|--apply|--restore FOLDER [--report NEW-FILE.json]");
+                }
+                if (args.Length != 2 && (args.Length != 4 || args[2] != "--report"))
+                {
+                    throw new ArgumentException("Invalid arguments.");
+                }
+                string root = AutoSetup.Resolve(SelectedProduct, args[1]);
+                if (args.Length == 4)
+                {
+                    reportPath = Path.GetFullPath(args[3]);
+                    Paths.RejectReparsePoints(reportPath);
+                    if (Paths.IsInside(root, reportPath) || String.Equals(root, reportPath, StringComparison.OrdinalIgnoreCase)
+                        || File.Exists(reportPath) || Directory.Exists(reportPath))
+                    {
+                        throw new ArgumentException("The report must be a new file outside the selected installation.");
+                    }
+                    reportValidated = true;
+                }
+                PatchInspection result;
+                if (args[0] == "--inspect") { result = ModCore.Inspect(SelectedProduct, root, AssetsPath); }
+                else if (args[0] == "--apply") { result = ModCore.Apply(SelectedProduct, root, AssetsPath); }
+                else { result = ModCore.Restore(SelectedProduct, root); }
+                string json = ModCore.Json(result);
+                if (reportValidated) { WriteNewReport(reportPath, json); }
+                Console.WriteLine(json);
+                return 0;
+            }
+            catch (Exception error)
+            {
+                string json = ModCore.Json(new { Product = SelectedProduct.ToString(), Status = "Error", Error = error.Message });
+                Console.Error.WriteLine(json);
+                if (reportValidated)
+                {
+                    try { WriteNewReport(reportPath, json); }
+                    catch { }
+                }
+                return 1;
+            }
+        }
         private static void WriteNewReport(string path, string json)
         {
             Paths.RejectReparsePoints(path);
@@ -147,390 +115,298 @@ namespace Tawop
                 stream.Flush(true);
             }
         }
-
-        internal static string DetectInstall(Product product)
-        {
-            try
-            {
-                if (product == Product.Discord)
-                {
-                    string parent = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Discord");
-                    if (Directory.Exists(parent))
-                    {
-                        string[] apps = Directory.GetDirectories(parent, "app-*");
-                        Array.Sort(apps, delegate (string left, string right)
-                        {
-                            return Directory.GetLastWriteTimeUtc(right).CompareTo(Directory.GetLastWriteTimeUtc(left));
-                        });
-                        foreach (string app in apps)
-                        {
-                            if (File.Exists(Path.Combine(app, "Discord.exe")))
-                            {
-                                return app;
-                            }
-                        }
-                    }
-                }
-                else if (product == Product.Steam)
-                {
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
-                    {
-                        string path = key == null ? null : key.GetValue("SteamPath") as string;
-                        if (!String.IsNullOrEmpty(path) && File.Exists(Path.Combine(path, "steam.exe")))
-                        {
-                            return Path.GetFullPath(path);
-                        }
-                    }
-
-                    string standard = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
-                    if (File.Exists(Path.Combine(standard, "steam.exe")))
-                    {
-                        return standard;
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return "";
-        }
     }
 
     internal sealed class ModForm : Form
     {
         private readonly Product product;
-        private readonly TextBox path = new TextBox();
-        private readonly TextBox details = new TextBox();
+        private readonly Button start = new Button();
+        private readonly Label found = new Label();
         private readonly Label status = new Label();
-        private readonly Button inspect = new Button();
-        private readonly Button apply = new Button();
-        private readonly Button restore = new Button();
-        private readonly Button browse = new Button();
+        private readonly TextBox details = new TextBox();
+        private readonly LinkLabel choose = new LinkLabel();
+        private readonly LinkLabel undo = new LinkLabel();
+        private readonly LinkLabel showDetails = new LinkLabel();
         private readonly BackgroundWorker worker = new BackgroundWorker();
-        private PatchInspection lastInspection;
+        private string selectedRoot;
         private bool busy;
+        private bool finished;
+
+        internal string SelectedRoot
+        {
+            get { return selectedRoot; }
+            set { selectedRoot = value; UpdateReadyState(); }
+        }
+
         public ModForm(Product selectedProduct)
         {
             product = selectedProduct;
-            Text = "Low Consuming " + product + " — Modificador / Patcher";
-            Size = new Size(900, 730);
-            MinimumSize = new Size(580, 450);
+            Text = "Low Consuming " + product;
+            AccessibleName = Text;
+            Size = new Size(650, 510);
+            MinimumSize = new Size(500, 460);
             StartPosition = FormStartPosition.CenterScreen;
             AutoScaleMode = AutoScaleMode.Dpi;
-            Font = new Font("Segoe UI", 10);
-            AccessibleName = Text;
-            try
-            {
-                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-            }
-            catch
-            {
-            }
-
-            TableLayoutPanel frame = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 2
-            };
-            frame.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            frame.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            frame.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Controls.Add(frame);
-            Panel scroller = new Panel
-            {
-                Dock = DockStyle.Fill,
-                AutoScroll = true
-            };
-            frame.Controls.Add(scroller, 0, 0);
+            Font = new Font("Segoe UI", 11);
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+            catch { }
             TableLayoutPanel content = new TableLayoutPanel
             {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding(20),
-                ColumnCount = 1,
-                RowCount = 8
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 9, Padding = new Padding(24)
             };
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (int i = 0; i < 8; i++)
+            for (int row = 0; row < 9; row++)
             {
-                content.RowStyles.Add(i == 6 ? new RowStyle(SizeType.Absolute, 220) : new RowStyle(SizeType.AutoSize));
+                content.RowStyles.Add(new RowStyle(row == 7 ? SizeType.Percent : SizeType.AutoSize, row == 7 ? 100 : 0));
             }
-
-            scroller.Controls.Add(content);
-            Label title = LabelFor("Low Consuming " + product, true);
-            title.Font = new Font("Segoe UI", 23, FontStyle.Bold);
+            Controls.Add(content);
+            Label title = MakeLabel("Low Consuming " + product);
+            title.Font = new Font("Segoe UI", 24, FontStyle.Bold);
+            title.Margin = new Padding(0, 0, 0, 12);
             content.Controls.Add(title, 0, 0);
-            content.Controls.Add(LabelFor("MOD KIT 0.3 · Código y parches propios · Interfaz de bajo costo", false), 0, 1);
-            string description;
-            if (product == Product.Chrome)
+            content.Controls.Add(MakeLabel(product == Product.Chrome
+                ? "Prepare a lighter Chromium build. This changes source files; it does not install a browser."
+                : "Make " + product + " look simpler. Click once to check, back up and apply the changes."), 0, 1);
+            Label steps = MakeLabel(product == Product.Chrome
+                ? "Your existing source files are backed up automatically."
+                : "The app may close briefly. Finish calls and active tasks first.");
+            steps.Font = new Font(Font.FontFamily, 10);
+            content.Controls.Add(steps, 0, 2);
+            ConfigureLabel(found);
+            found.AccessibleName = "Installation detection";
+            content.Controls.Add(found, 0, 3);
+            start.Dock = DockStyle.Fill;
+            start.Height = 50;
+            start.Margin = new Padding(0, 6, 0, 14);
+            start.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            start.AccessibleName = "Start automatic setup";
+            content.Controls.Add(start, 0, 4);
+            ConfigureLabel(status);
+            status.MinimumSize = new Size(0, 52);
+            status.AccessibleName = "Setup status";
+            content.Controls.Add(status, 0, 5);
+            FlowLayoutPanel links = new FlowLayoutPanel
             {
-                description = "Modifica las fuentes de Chromium con la marca ChromeTawop y ahorro de memoria agresivo. "
-                    + "Después hay que compilar el navegador con C++ (ver README_CHROMIUM.md).";
-            }
-            else if (product == Product.Discord)
-            {
-                description = "Reconstruye los ASAR con estilos simples y un preload que pausa vídeos decorativos al ocultar la ventana. "
-                    + "Conserva el motor original y verifica la integridad de los recursos.";
-            }
-            else
-            {
-                description = "Modifica los CSS de Steam para reducir movimiento, fondos e imágenes decorativas. "
-                    + "Mantiene los textos y controles del cliente original.";
-            }
-            content.Controls.Add(LabelFor(description, false), 0, 2);
-            content.Controls.Add(LabelFor(product == Product.Chrome ? "Carpeta src del checkout de Chromium:" : "Carpeta de la instalación que vas a modificar:", false), 0, 3);
-            TableLayoutPanel location = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 1,
-                AutoSize = true
+                Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 8)
             };
-            location.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            location.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            path.Dock = DockStyle.Fill;
-            path.Text = Program.DetectInstall(product);
-            path.AccessibleName = "Carpeta a modificar";
-            path.Margin = new Padding(0, 4, 8, 8);
-            browse.Text = "&Elegir carpeta";
-            browse.AutoSize = true;
-            location.Controls.Add(path, 0, 0);
-            location.Controls.Add(browse, 1, 0);
-            content.Controls.Add(location, 0, 4);
-            FlowLayoutPanel actions = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                AutoSize = true,
-                WrapContents = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink
-            };
-            SetButton(inspect, "&Analizar archivos");
-            SetButton(apply, "Aplicar &parches");
-            SetButton(restore, "&Restaurar originales");
-            Button sources = new Button();
-            SetButton(sources, "Abrir &fuentes");
-            actions.Controls.Add(inspect);
-            actions.Controls.Add(apply);
-            actions.Controls.Add(restore);
-            actions.Controls.Add(sources);
-            content.Controls.Add(actions, 0, 5);
+            ConfigureLink(choose, "Choose a different folder");
+            ConfigureLink(undo, "Undo changes");
+            ConfigureLink(showDetails, "Details");
+            links.Controls.Add(choose);
+            links.Controls.Add(undo);
+            links.Controls.Add(showDetails);
+            content.Controls.Add(links, 0, 6);
             details.Dock = DockStyle.Fill;
             details.Multiline = true;
             details.ReadOnly = true;
-            details.ScrollBars = ScrollBars.Both;
-            details.WordWrap = false;
+            details.ScrollBars = ScrollBars.Vertical;
             details.Font = new Font("Consolas", 9);
-            details.AccessibleName = "Resultado y archivos del parche";
-            details.Text = "Analizá la carpeta para ver los archivos y hashes antes de aplicar.\r\n\r\n"
-                + "Este ejecutable es un modificador, no una app reescrita ni un navegador.\r\n"
-                + "El ahorro de RAM/CPU todavía requiere mediciones comparables.";
-            content.Controls.Add(details, 0, 6);
-            content.Controls.Add(LabelFor(
-                "Cerrá el cliente desde su bandeja antes de aplicar o restaurar. "
-                + "Se guardan originales en .tawop dentro de la instalación. "
-                + "Las actualizaciones pueden reemplazar los parches: el restaurador conserva cambios externos.", false), 0, 7);
-            status.Dock = DockStyle.Fill;
-            status.AutoSize = true;
-            status.MinimumSize = new Size(0, 38);
-            status.Padding = new Padding(20, 8, 20, 8);
-            status.Text = "Listo. Ningún archivo fue modificado.";
-            status.AccessibleName = "Estado de modificación";
-            frame.Controls.Add(status, 0, 1);
+            details.AccessibleName = "Technical details";
+            details.Visible = false;
+            details.Text = "Version 0.4.0. Local, reversible patches. No account or password is needed.\r\n"
+                + "Resource savings still need measurement. No data is uploaded by this tool.";
+            content.Controls.Add(details, 0, 7);
+            Label note = MakeLabel("Experimental · Resource savings are not verified.");
+            note.Font = new Font(Font.FontFamily, 9);
+            note.Margin = new Padding(0, 10, 0, 0);
+            content.Controls.Add(note, 0, 8);
             if (!SystemInformation.HighContrast)
             {
-                BackColor = Color.FromArgb(17, 26, 23);
-                ForeColor = Color.FromArgb(223, 247, 233);
-                title.ForeColor = Color.FromArgb(121, 242, 180);
-                details.BackColor = Color.FromArgb(12, 20, 17);
+                BackColor = Color.FromArgb(19, 25, 24);
+                ForeColor = Color.FromArgb(235, 242, 239);
+                title.ForeColor = Color.FromArgb(147, 236, 184);
+                start.BackColor = Color.FromArgb(147, 236, 184);
+                start.ForeColor = Color.FromArgb(13, 29, 20);
+                start.FlatStyle = FlatStyle.Flat;
+                start.FlatAppearance.BorderSize = 0;
+                details.BackColor = Color.FromArgb(26, 34, 31);
                 details.ForeColor = ForeColor;
-                foreach (Button button in new Button[]
+                foreach (LinkLabel link in new LinkLabel[] { choose, undo, showDetails })
                 {
-                    inspect,
-                    apply,
-                    restore,
-                    browse,
-                    sources
-                }
-
-                )
-                {
-                    button.BackColor = Color.FromArgb(37, 62, 49);
-                    button.ForeColor = ForeColor;
-                    button.FlatStyle = FlatStyle.Flat;
+                    link.LinkColor = Color.FromArgb(166, 213, 240);
+                    link.ActiveLinkColor = Color.White;
+                    link.VisitedLinkColor = link.LinkColor;
                 }
             }
-
-            path.TextChanged += delegate
+            worker.WorkerReportsProgress = true;
+            worker.DoWork += delegate(object sender, DoWorkEventArgs e)
             {
-                lastInspection = null;
+                object[] request = (object[])e.Argument;
+                bool restore = (bool)request[1];
+                string assets = restore ? null : Program.AssetsPath;
+                e.Result = AutoSetup.Run(product, (string)request[0], assets, restore,
+                    delegate(string message) { worker.ReportProgress(0, message); });
             };
-            browse.Click += delegate
+            worker.ProgressChanged += delegate(object sender, ProgressChangedEventArgs e) { status.Text = (string)e.UserState; };
+            worker.RunWorkerCompleted += Complete;
+            start.Click += delegate
             {
-                using (FolderBrowserDialog dialog = new FolderBrowserDialog())
-                {
-                    dialog.Description = product == Product.Chrome ? "Seleccioná src de Chromium (no Google Chrome instalado)" : "Seleccioná la carpeta del cliente";
-                    if (Directory.Exists(path.Text))
-                    {
-                        dialog.SelectedPath = path.Text;
-                    }
-
-                    if (dialog.ShowDialog(this) == DialogResult.OK)
-                    {
-                        path.Text = dialog.SelectedPath;
-                    }
-                }
+                if (finished) { Close(); return; }
+                if (String.IsNullOrEmpty(selectedRoot) && !ChooseFolder()) { return; }
+                Begin(false);
             };
-            sources.Click += delegate
+            choose.LinkClicked += delegate { ChooseFolder(); };
+            undo.LinkClicked += delegate { Begin(true); };
+            showDetails.LinkClicked += delegate
             {
+                details.Visible = !details.Visible;
+                showDetails.Text = details.Visible ? "Hide details" : "Details";
+                if (details.Visible && Height < 650) { Height = 650; }
+            };
+            FormClosing += delegate(object sender, FormClosingEventArgs e)
+            {
+                if (busy) { e.Cancel = true; status.Text = "Please wait until setup finishes."; }
+            };
+            selectedRoot = AutoSetup.Detect(product);
+            UpdateReadyState();
+        }
+
+        private static Label MakeLabel(string text)
+        {
+            Label label = new Label { Text = text };
+            ConfigureLabel(label);
+            return label;
+        }
+        private static void ConfigureLabel(Label label)
+        {
+            label.Dock = DockStyle.Fill;
+            label.AutoSize = true;
+            label.Margin = new Padding(0, 0, 0, 10);
+        }
+        private static void ConfigureLink(LinkLabel link, string text)
+        {
+            link.Text = text;
+            link.AutoSize = true;
+            link.Margin = new Padding(0, 3, 18, 3);
+        }
+        private bool HasBackup()
+        {
+            return !String.IsNullOrEmpty(selectedRoot)
+                && File.Exists(Path.Combine(selectedRoot, ".tawop", product.ToString().ToLowerInvariant() + ".json"));
+        }
+        private void UpdateReadyState()
+        {
+            finished = false;
+            found.Text = String.IsNullOrEmpty(selectedRoot)
+                ? (product == Product.Chrome ? "Choose your Chromium source folder to begin." : product + " was not found automatically.")
+                : (product == Product.Chrome ? "Chromium source folder selected." : product + " found. No folder setup needed.");
+            start.Text = String.IsNullOrEmpty(selectedRoot)
+                ? (product == Product.Chrome ? "Choose Chromium folder" : "Choose " + product + " folder")
+                : (product == Product.Chrome ? "Prepare Chromium sources" : "Optimize " + product);
+            status.Text = "Ready. Your original files will be backed up.";
+            undo.Enabled = HasBackup();
+        }
+        private bool ChooseFolder()
+        {
+            if (busy) { return false; }
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = product == Product.Chrome
+                    ? "Choose src from a Chromium source checkout. Installed Google Chrome is not supported."
+                    : "Choose the " + product + " folder. Its main folder or a version folder both work.";
+                if (!String.IsNullOrEmpty(selectedRoot) && Directory.Exists(selectedRoot)) { dialog.SelectedPath = selectedRoot; }
+                if (dialog.ShowDialog(this) != DialogResult.OK) { return false; }
                 try
                 {
-                    Process.Start(new ProcessStartInfo { FileName = Path.Combine(Program.PackageRoot, "README.md"), UseShellExecute = true });
+                    selectedRoot = AutoSetup.Resolve(product, dialog.SelectedPath);
+                    UpdateReadyState();
+                    return true;
                 }
-                catch (Exception e)
-                {
-                    ShowError(e);
-                }
-            };
-            inspect.Click += delegate
-            {
-                BeginOperation("inspect");
-            };
-            apply.Click += delegate
-            {
-                if (lastInspection == null || lastInspection.Status != "Preparado; todavía no aplicado")
-                {
-                    MessageBox.Show(this, "Primero analizá la carpeta para revisar los archivos.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                string message = "Se modificarán " + lastInspection.Files.Count + " archivos en:\r\n"
-                    + lastInspection.Root + "\r\n\r\n" + description
-                    + "\r\n\r\nSe guardará respaldo local. No hay un ahorro de RAM demostrado. ¿Aplicar?";
-                if (MessageBox.Show(this, message, "Aplicar parches Tawop", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                {
-                    BeginOperation("apply");
-                }
-            };
-            restore.Click += delegate
-            {
-                BeginOperation("restore");
-            };
-            worker.DoWork += delegate (object sender, DoWorkEventArgs e)
-            {
-                string[] request = (string[])e.Argument;
-                if (request[0] == "inspect")
-                {
-                    e.Result = ModCore.Inspect(product, request[1], Program.AssetsPath);
-                }
-                else if (request[0] == "apply")
-                {
-                    e.Result = ModCore.Apply(product, request[1], Program.AssetsPath);
-                }
-                else
-                {
-                    e.Result = ModCore.Restore(product, request[1]);
-                }
-            };
-            worker.RunWorkerCompleted += delegate (object sender, RunWorkerCompletedEventArgs e)
-            {
-                SetBusy(false);
-                if (e.Error != null)
-                {
-                    status.Text = "No se completó la operación.";
-                    details.Text = e.Error.Message;
-                    ShowError(e.Error);
-                    return;
-                }
-
-                lastInspection = (PatchInspection)e.Result;
-                StringBuilder output = new StringBuilder();
-                output.AppendLine(lastInspection.Status);
-                output.AppendLine(lastInspection.Kind);
-                output.AppendLine(lastInspection.MemoryStatus);
-                output.AppendLine(lastInspection.Root);
-                output.AppendLine();
-                foreach (PatchRecord file in lastInspection.Files)
-                {
-                    output.AppendLine(file.RelativePath);
-                    output.AppendLine("  " + file.BeforeBytes + " → " + file.AfterBytes + " bytes");
-                    output.AppendLine("  SHA256 antes: " + file.BeforeHash);
-                    output.AppendLine("  SHA256 parche: " + file.AfterHash);
-                }
-
-                if (lastInspection.BackupPath != null)
-                {
-                    output.AppendLine("\r\nRespaldo: " + lastInspection.BackupPath);
-                }
-
-                details.Text = output.ToString();
-                status.Text = lastInspection.Status;
-            };
-            FormClosing += delegate (object sender, FormClosingEventArgs e)
-            {
-                if (busy)
-                {
-                    e.Cancel = true;
-                    status.Text = "Esperá a que termine la operación antes de cerrar.";
-                }
-            };
+                catch (Exception error) { ShowFailure(error); return false; }
+            }
         }
-
-        private static Label LabelFor(string text, bool heading)
+        private void Begin(bool restore)
         {
-            return new Label
-            {
-                Text = text,
-                Dock = DockStyle.Fill,
-                AutoSize = true,
-                Margin = new Padding(0, 0, 0, heading ? 5 : 12)
-            };
+            if (busy) { return; }
+            finished = false;
+            SetBusy(true);
+            start.Text = restore ? "Undoing changes..." : "Working...";
+            status.Text = "Checking the installation. Please wait.";
+            worker.RunWorkerAsync(new object[] { selectedRoot, restore });
         }
-
-        private static void SetButton(Button button, string text)
+        private void Complete(object sender, RunWorkerCompletedEventArgs e)
         {
-            button.Text = text;
-            button.AutoSize = true;
-            button.Padding = new Padding(5);
-            button.Margin = new Padding(0, 0, 8, 8);
+            SetBusy(false);
+            if (e.Error != null) { ShowFailure(e.Error); return; }
+            AutoSetupResult result = (AutoSetupResult)e.Result;
+            selectedRoot = result.Root;
+            finished = true;
+            start.Text = "Done — close";
+            status.Text = result.Message;
+            undo.Enabled = HasBackup();
+            StringBuilder text = new StringBuilder();
+            text.AppendLine(result.Message);
+            text.AppendLine("Installation: " + result.Root);
+            if (result.Inspection != null)
+            {
+                text.AppendLine(result.Inspection.Kind);
+                foreach (PatchRecord file in result.Inspection.Files)
+                {
+                    text.AppendLine(file.RelativePath);
+                    text.AppendLine("SHA256: " + file.AfterHash);
+                }
+                if (!String.IsNullOrEmpty(result.Inspection.BackupPath)) { text.AppendLine("Backup: " + result.Inspection.BackupPath); }
+            }
+            details.Text = text.ToString();
         }
-
+        private void ShowFailure(Exception error)
+        {
+            finished = false;
+            start.Text = "Try again";
+            details.Text = error.Message;
+            string message = error.Message ?? "";
+            if (message.IndexOf("fuse", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("integrity", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                status.Text = "This version cannot be changed safely. See Details for compatibility information.";
+            }
+            else if (IsPermissionError(error))
+            {
+                status.Text = "Windows denied access. Run this tool as administrator only if this folder requires it.";
+            }
+            else if (IsMissingFileError(error))
+            {
+                status.Text = "A required file is missing. Choose the complete "
+                    + (product == Product.Chrome ? "Chromium source" : product.ToString()) + " folder and try again.";
+            }
+            else if (message.IndexOf("tray", StringComparison.OrdinalIgnoreCase) >= 0 || message.IndexOf("Quit", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                status.Text = message;
+            }
+            else { status.Text = "Setup could not finish. Open Details for the reason, then try again."; }
+            undo.Enabled = HasBackup();
+        }
+        private static bool IsPermissionError(Exception error)
+        {
+            for (Exception current = error; current != null; current = current.InnerException)
+            {
+                Win32Exception native = current as Win32Exception;
+                if (current is UnauthorizedAccessException || (native != null && native.NativeErrorCode == 5))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        private static bool IsMissingFileError(Exception error)
+        {
+            for (Exception current = error; current != null; current = current.InnerException)
+            {
+                if (current is DirectoryNotFoundException || current is FileNotFoundException) { return true; }
+            }
+            return false;
+        }
         private void SetBusy(bool value)
         {
             busy = value;
-            inspect.Enabled = !value;
-            apply.Enabled = !value;
-            restore.Enabled = !value;
-            browse.Enabled = !value;
-            path.Enabled = !value;
+            start.Enabled = !value;
+            choose.Enabled = !value;
+            undo.Enabled = !value && HasBackup();
+            UseWaitCursor = value;
         }
-
-        private void BeginOperation(string action)
-        {
-            if (busy)
-            {
-                return;
-            }
-
-            SetBusy(true);
-            status.Text = action == "inspect" ? "Analizando archivos sin escribir..." : action == "apply" ? "Aplicando con respaldo..." : "Restaurando archivos verificados...";
-            worker.RunWorkerAsync(new string[] { action, path.Text });
-        }
-
-        private void ShowError(Exception error)
-        {
-            MessageBox.Show(this, error.Message + "\r\n\r\nSi Windows deniega acceso a Program Files, abrí este modificador como administrador.", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-
         protected override void Dispose(bool disposing)
         {
-            if (disposing)
-            {
-                worker.Dispose();
-            }
-
+            if (disposing) { worker.Dispose(); }
             base.Dispose(disposing);
         }
     }

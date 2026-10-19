@@ -10,7 +10,7 @@ namespace Tawop
     public static class AssetStore
     {
         private const int MaximumAssetBytes = 1024 * 1024;
-        private const string BundleVersion = "0.3.0";
+        private const string BundleVersion = "0.4.0";
         private static readonly string[] RelativePaths =
         {
             "discord/tawop.css",
@@ -23,7 +23,7 @@ namespace Tawop
             string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (String.IsNullOrWhiteSpace(localData))
             {
-                throw new InvalidOperationException("No se encontró la carpeta de datos locales del usuario.");
+                throw new InvalidOperationException("Windows did not provide a local application data folder.");
             }
 
             string cacheRoot = Path.Combine(localData, "TawopModKit", "assets");
@@ -34,14 +34,14 @@ namespace Tawop
         {
             if (String.IsNullOrWhiteSpace(packageRoot) || String.IsNullOrWhiteSpace(cacheRoot) || assetAssembly == null)
             {
-                throw new ArgumentException("Se requieren las carpetas del paquete y de caché y el ensamblado de recursos.");
+                throw new ArgumentException("Package and cache folders and the resource assembly are required.");
             }
 
             string packageDirectory = Path.GetFullPath(packageRoot);
             Paths.RejectReparsePoints(packageDirectory);
             if (!Directory.Exists(packageDirectory))
             {
-                throw new DirectoryNotFoundException("No existe la carpeta del ejecutable: " + packageDirectory);
+                throw new DirectoryNotFoundException("The executable folder does not exist: " + packageDirectory);
             }
 
             string externalAssets = Paths.Child(packageDirectory, "assets");
@@ -72,7 +72,7 @@ namespace Tawop
 
                     if (!acquired)
                     {
-                        throw new InvalidOperationException("Otra instancia está preparando los recursos Tawop. Volvé a intentar.");
+                        throw new InvalidOperationException("Another copy is preparing the resources. Try again in a moment.");
                     }
 
                     CreatePlainDirectory(cacheDirectory);
@@ -106,7 +106,7 @@ namespace Tawop
         {
             if (!Directory.Exists(directory))
             {
-                throw new InvalidDataException("La ruta assets debe ser una carpeta completa: " + directory);
+                throw new InvalidDataException("The assets path must be a complete folder: " + directory);
             }
 
             foreach (string relative in RelativePaths)
@@ -114,7 +114,7 @@ namespace Tawop
                 string path = Paths.Child(directory, relative);
                 if (!File.Exists(path))
                 {
-                    throw new InvalidDataException("La carpeta assets está incompleta. Falta " + relative + ". Reinstalá el paquete completo o usá el EXE en una carpeta sin assets.");
+                    throw new InvalidDataException("The assets folder is incomplete. Missing: " + relative + ". Extract the full ZIP again, or run the EXE in a folder without assets.");
                 }
             }
         }
@@ -129,7 +129,7 @@ namespace Tawop
                 {
                     if (stream == null)
                     {
-                        throw new InvalidDataException("El ejecutable no incluye " + resourceName + ". Descargá una versión completa o compilá con los recursos del proyecto.");
+                        throw new InvalidDataException("This executable is missing " + resourceName + ". Download the full release or build it with the project resources.");
                     }
 
                     byte[] content = ReadLimited(stream, resourceName);
@@ -155,7 +155,7 @@ namespace Tawop
                 {
                     if (output.Length + count > MaximumAssetBytes)
                     {
-                        throw new InvalidDataException("Un recurso Tawop supera el límite de 1 MiB: " + name);
+                        throw new InvalidDataException("A bundled resource exceeds the 1 MiB limit: " + name);
                     }
 
                     output.Write(buffer, 0, count);
@@ -163,7 +163,7 @@ namespace Tawop
 
                 if (output.Length == 0)
                 {
-                    throw new InvalidDataException("Un recurso Tawop está vacío: " + name);
+                    throw new InvalidDataException("A bundled resource is empty: " + name);
                 }
 
                 return output.ToArray();
@@ -226,14 +226,14 @@ namespace Tawop
             Paths.RejectReparsePoints(path);
             if (!File.Exists(path))
             {
-                throw new InvalidDataException("El recurso de caché falta o no es un archivo: " + path);
+                throw new InvalidDataException("A cached resource is missing or is not a file: " + path);
             }
 
             using (FileStream input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 if (ModCore.Hash(ReadLimited(input, path)) != expectedHash)
                 {
-                    throw new InvalidDataException("El recurso de caché fue alterado y no se sobrescribió: " + path + ". Mové la carpeta de esa versión para regenerarla.");
+                    throw new InvalidDataException("A cached resource was changed and was preserved: " + path + ". Move that version folder aside to let the tool recreate it.");
                 }
             }
         }
