@@ -1,67 +1,56 @@
 # Low Consuming Steam
 
-An open tool for applying local modifications to Steam on Windows. Includes original source code, guides, tests and the **`SteamTawop.exe`** executable.
+A small Windows tool with one main button. It finds a supported installation, checks compatibility, saves a backup and applies the project's simpler interface changes.
 
-**Experimental.** This executable is a patching tool; the original client engine remains. For Chrome, it patches Chromium source code and still requires building and testing the browser. The combined target of Discord, Steam and a browser with **2048 MiB available after Windows**, allocating 1536 MiB to those apps and leaving 512 MiB spare, **has not been demonstrated**.
+**Experimental release.** This is a local patch tool, not a replacement client. The combined 2 GiB memory target has not been demonstrated. Chrome is a Chromium source tool and does not include a working browser.
 
-[Español](README.es.md) · [Source](https://github.com/TaWADAaaa/low-consuming-steam) · [Downloads](https://github.com/TaWADAaaa/low-consuming-steam/releases) · [English user guide](docs/USER_GUIDE.en.md) · [Donations / Donaciones](DONATIONS.md) · [Privacy / Privacidad](PRIVACY.md)
+[Download](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.4.0-experimental) · [Beginner guide](docs/USER_GUIDE.en.md) · [Source code](https://github.com/TaWADAaaa/low-consuming-steam) · [Donations](DONATIONS.md) · [Privacy](PRIVACY.md)
 
-## What this release changes
+## Start here
+
+1. Open the [v0.4.0 download page](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.4.0-experimental).
+2. Download **low-consuming-steam-v0.4.0-experimental.zip**. Right-click it and choose **Extract All**.
+3. Open the extracted folder and double-click **SteamTawop.exe**. You do not need the CMD files, Node or a development tool.
+4. Save your work and finish calls, downloads or updates. Click the large button. After checks pass, it asks Discord or Steam to close, applies changes and reopens a client that was running. If it stays in the tray, use its Quit/Exit menu and retry.
+5. Wait for the result. **Undo changes** restores verified original files when you want to go back.
+
+Most users do not need to select a folder. If detection cannot find an unambiguous supported installation, use **Choose a different folder**. Discord's parent folder, such as %LOCALAPPDATA%\Discord, is accepted for detection. Chrome requires an existing Chromium source checkout; installed Google Chrome is not a valid target.
+
+## What it changes
 
 Patches supported client CSS with flat surfaces, visible focus and fewer shadows/blur effects. Hides recognized decorative blurred copies while retaining functional loading indicators. The library, downloads, games and Steam engine remain and need real client checks.
 
-The public projects are [Discord](https://github.com/TaWADAaaa/low-consuming-discord), [Steam](https://github.com/TaWADAaaa/low-consuming-steam) and [Chrome / Chromium](https://github.com/TaWADAaaa/low-consuming-chrome). This repository distributes **one patching tool: `SteamTawop.exe`**, with its sources and downloads. The tools share an original patch, backup and restore engine; sharing these sources does not make the third-party clients open source.
+Supported decoration is reduced while text, controls and functional indicators remain. Flat backgrounds, fewer shadows and visible keyboard focus favor a readable interface. Hiding an image does not prove it stops downloading or using memory. Original assets stay on disk, and backups need extra space.
 
-## Download and use
+Unsupported files, incomplete installations, conflicting backups and unknown integrity requirements are rejected before patching. An explanatory message is a compatibility result; installing the tool does not make every client version supported. See the [beginner guide](docs/USER_GUIDE.en.md) for common messages.
 
-[Download SteamTawop.exe](https://github.com/TaWADAaaa/low-consuming-steam/releases/download/v0.3.0-experimental/SteamTawop.exe) · [Sources and guides ZIP](https://github.com/TaWADAaaa/low-consuming-steam/releases/download/v0.3.0-experimental/low-consuming-steam-v0.3.0-experimental.zip)
+## Windows download messages
 
-Run the individual EXE, or extract the full ZIP for sources, guides and editable assets. The executable embeds the kit's three original assets. Without an external `assets/` folder, it prepares them under `%LOCALAPPDATA%\TawopModKit\assets\0.3.0-<hash>` and checks their SHA256 hashes before use.
+The ZIP is a standard archive containing ordinary, unobfuscated Windows executables. The EXE is **unsigned**. Windows SmartScreen or antivirus software may still warn, including for a newly signed application. No packaging format can guarantee zero warnings. This project does not disable or bypass Windows protection.
 
-1. Select a supported installation folder. For Chrome, select the `src` folder of a Chromium checkout, not an installed Google Chrome folder.
-2. Choose **Analizar archivos** to inspect paths, sizes and hashes.
-3. Close the client from its tray and wait for any update to finish.
-4. Choose **Aplicar parches**. The kit keeps exact originals and a journal under `.tawop/` in the selected installation.
-5. Start the client normally and check its features. To undo the changes, close it and choose **Restaurar originales**.
+Use this repository's release downloads. SHA256 files let you check that a download matches a release; they do not certify safety. The [source](src/) and [build instructions](#build-from-source) are available for review. [Microsoft explains application reputation](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation).
 
-Keep `.tawop/` until restoration is complete. If an updater or another tool changed a file, restore preserves that change and leaves its backup pending. Replacements are atomic per file; the whole installation is not a single atomic transaction.
+## Build from source
 
-The executables are unsigned. Source code and hashes help review a release; they do not certify safety or compatibility. Writing to a protected folder requires the appropriate Windows permissions.
+Use Windows 10/11, PowerShell 5.1 and .NET Framework 4.8. Development tests also need Node on PATH. Run BUILD.cmd, or:
 
-## Simple assets and readable controls
+~~~powershell
+powershell.exe -NoProfile -File .\scripts\Build.ps1 -Product Steam
+~~~
 
-The visual changes prioritize flat surfaces, contrast, keyboard focus and removal of recognized decoration. Controls, messages, names and functional indicators must remain usable. Client selectors change with updates and need checking in the real applications.
+Each repository produces one executable. Sources for the shared backup engine and format modules are included. The standalone executable embeds the original CSS and JavaScript it needs. A complete external assets folder allows customization without recompiling. Developer explanations are in the guides, with clear names and consistent formatting in source instead of inline documentation comments.
 
-Hiding an asset or making it transparent does not guarantee that it stops downloading, decoding or occupying memory. The kit does not remove original client assets from disk, and backups use additional space. Tests check the declared palette, but full accessibility across every client screen remains unverified.
-
-A complete external `assets/` folder allows customization without recompiling. It must contain `discord/tawop.css`, `discord/preload.js` and `steam/tawop.css`. Incomplete folders are rejected to avoid mixing versions. A modified generated cache causes an error without overwriting it; the message identifies the version folder that can be moved aside to regenerate it.
-
-## Build and check
-
-Use Windows 10/11, PowerShell 5.1 and the .NET Framework 4.8 C# compiler. The full development test suite also needs Node on PATH; the distributed executable does not need Node or Electron.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1 -Product Steam
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Measure.Tests.ps1
-```
-
-`Build.ps1 -Product Steam -SkipTests` builds only this patching tool without validating the suite. Fixtures check the shared patch engine and formats; they do not certify real client voice calls, updates or resource use. Chromium requires a separate C++ toolchain and all applicable notices. [Chromium build guide in Spanish](README_CHROMIUM.md).
-
-## Guides and evidence
-
-| Document | Contents |
+| Guide | Contents |
 |---|---|
-| [English user guide](docs/USER_GUIDE.en.md) | Applying, restoring, assets, privacy and development. |
-| [Architecture, Spanish](docs/ARQUITECTURA.md) | Patch engine, ASAR, embedded assets, backups and limits. |
-| [Performance, Spanish](docs/RENDIMIENTO.md) | RAM/CPU budget, contrast and comparison protocol. |
-| [Validation, Spanish](docs/VALIDACION.md) | Repeatable tests and outstanding real client checks. |
-| [Contributing, Spanish](CONTRIBUTING.md) | Source organization, tests and reproducible reports. |
-| [Third-party notices, Spanish](THIRD_PARTY_NOTICES.md) | Licenses and third-party components. |
-
-Design explanations live in the guides. Original code uses explicit names and consistent formatting without inline documentation comments. Functional compiler directives remain.
+| [Beginner guide](docs/USER_GUIDE.en.md) | Download, automatic operation, undo and common messages. |
+| [Architecture](docs/ARQUITECTURA.md) | Detection, integrity checks, backups and limitations. |
+| [Performance](docs/RENDIMIENTO.md) | Memory/CPU targets and a repeatable measurement procedure. |
+| [Validation](docs/VALIDACION.md) | Automated checks and outstanding real client tests. |
+| [Chromium build](README_CHROMIUM.md) | Separate native browser compilation for developers. |
+| [Contributing](CONTRIBUTING.md) | Code layout, checks and private-data-free issue reports. |
 
 ## License and support
 
-[MIT](LICENSE) covers original Tawop code, styles, tools, tests and artwork. Discord, Steam, Google Chrome and Chromium retain their respective licenses. This repository does not redistribute complete proprietary clients.
+[MIT](LICENSE) covers original project code, tools, tests and artwork. The original Discord, Steam, Google Chrome and Chromium components retain their licenses. Complete proprietary clients are not distributed here. [Third-party notices](THIRD_PARTY_NOTICES.md).
 
-Optional support addresses and their exact networks are listed in [Donations](DONATIONS.md). Donations are not required to download or use the tools.
+Optional [donations](DONATIONS.md) support development. Downloading and using the tools is free.

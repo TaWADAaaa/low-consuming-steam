@@ -1,28 +1,26 @@
-# Contribuir a Tawop
+# Contributing
 
-La explicación del diseño está en [ARQUITECTURA.md](docs/ARQUITECTURA.md); los criterios para publicar resultados de RAM/CPU están en [RENDIMIENTO.md](docs/RENDIMIENTO.md).
+Read [Architecture](docs/ARQUITECTURA.md) for design and [Performance](docs/RENDIMIENTO.md) for measurement criteria.
 
-## Preparar un cambio
+## Prepare a change
 
-1. Compilá con `scripts/Build.ps1` en Windows y ejecutá las pruebas del recolector con `tests/Measure.Tests.ps1`.
-2. Hacé un cambio con una responsabilidad clara. Usá nombres explícitos, sangría consistente y funciones separadas por tarea. Las explicaciones extensas van en documentación; no agregues comentarios dentro del código. Conservá directivas funcionales como `#requires` y `#if`.
-3. Probá entradas válidas y rechazos relevantes. Los cambios ASAR deben mantener hashes, bloques, offsets y archivos no modificados. Todo parche debe comparar el original, conservar el respaldo y permitir restaurarlo sin pisar cambios ajenos.
-4. Documentá el efecto observable y la evidencia. Un cambio de color o menos líneas CSS no demuestra ahorro de memoria.
+1. Build with scripts/Build.ps1 on Windows. Run the collector tests with tests/Measure.Tests.ps1.
+2. Keep each change focused. Use explicit names, consistent indentation and functions with clear responsibilities. Put design explanations in documentation; do not add inline documentation comments. Keep functional directives such as #requires and #if.
+3. Test valid inputs and meaningful rejection cases. ASAR changes must preserve hashes, blocks, offsets and unrelated payload. Every patch must compare originals, keep backups and restore without overwriting external changes.
+4. Document the observable behavior and evidence. A smaller CSS file or different color does not prove memory savings.
 
-Las pruebas del motor usan archivos temporales; no deben ejecutar ni cambiar clientes personales. Para añadir una variante de cliente, reproducí su estructura con fixtures propios mínimos y rechazá formatos ambiguos. La prueba de los clientes reales es una fase separada y debe declarar versiones y tareas comprobadas.
+Engine tests use temporary files and must not modify or run personal clients. New client layouts need minimal original fixtures and conservative rejection of ambiguous formats. Real-client checks are a separate phase with exact versions and tasks recorded.
 
-## Interfaz y assets
+## Interface and assets
 
-Conservá textos, nombres, controles, foco de teclado e indicadores funcionales. Limitá la eliminación a decoración reconocida; no uses reglas globales que escondan imágenes, videos, canvas o elementos con `aria-hidden`. Mantener una interfaz comprensible tiene prioridad sobre bajar un contador.
+Keep the main window in plain English with one primary action, readable text, visible focus and useful progress. Advanced details must not be required for ordinary operation. Keep names, controls and functional indicators. Limit hiding to recognized decoration, without global rules that remove images, video, canvas or aria-hidden content indiscriminately.
 
-Verificá contraste de paleta, zoom/escala, alto contraste y ventanas pequeñas. Los selectores de clientes remotos pueden cambiar: documentá qué estructura se verificó y qué ocurre si el selector ya no coincide. No afirmes que CSS evita una descarga sin medir solicitudes y decodificación.
+Check small windows, 100/150/200% scaling, high contrast, tab order and keyboard activation. Document selectors' inspected client structure and what happens after updates. Do not claim a download is prevented by CSS without measuring requests and decoding.
 
-## Reportar un problema
+## Report an issue
 
-Indicá versión de Tawop, Windows, cliente, archivo que falló, mensaje del parcheador, acción realizada y resultado esperado. Podés incluir una captura sin datos personales y un informe con rutas revisadas. No adjuntes ASAR completos, bundles, tokens, perfiles, conversaciones ni respaldos.
+Include tool version, Windows version, client version, action, exact error and expected result. Redact screenshots and reports. Do not attach complete archives, bundles, profiles, messages, tokens, cookies or backup folders.
 
-Un reporte de rendimiento debe incluir hardware, versiones, escenario, duración, cobertura, repeticiones y CSV/JSON revisados. Se aceptan resultados que no mejoran o que exceden el presupuesto: son necesarios para decidir el siguiente cambio.
+Performance reports need hardware, versions, scenario, duration, coverage, repetitions and reviewed CSV/JSON. Unfavorable and inconclusive results are useful. Do not publish estimated savings as measured results.
 
-## Qué se puede aportar
-
-El repositorio contiene código y assets propios bajo MIT. No agregues clientes completos, ejecutables o imágenes de terceros, fuentes propietarias, credenciales ni archivos de cuenta. Conservá la licencia y los avisos aplicables de cualquier dependencia nueva. Si publicás un Chromium derivado, conservá revisión, parches y los avisos completos de esa build.
+Original code and assets are MIT-licensed. Do not add third-party clients, proprietary sources, credentials or account data. Keep dependency notices. A future Chromium distribution must retain its revision, patches and complete applicable notices.

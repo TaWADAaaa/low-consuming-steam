@@ -1,10 +1,9 @@
 {
     "Name":  "Low Consuming Steam",
     "Repository":  "https://github.com/TaWADAaaa/low-consuming-steam",
-    "DescriptionES":  "Parches CSS abiertos para simplificar el cliente Steam en Windows. Superficies planas y menos decoraciÃ³n. Experimental; rendimiento real sin verificar.",
-    "DescriptionEN":  "Open CSS patches to simplify the Steam client on Windows. Flat surfaces and less decoration. Experimental; real performance remains unverified.",
+    "DescriptionEN":  "Simple English one-button patch tool for Steam on Windows. Automatic detection, verified backups and undo. Experimental; memory savings unverified.",
     "Downloads":  "https://github.com/TaWADAaaa/low-consuming-steam/releases",
     "Executable":  "SteamTawop.exe",
-    "Version":  "0.3.0-experimental",
+    "Version":  "0.4.0-experimental",
     "MemoryTargetVerified":  false
 }

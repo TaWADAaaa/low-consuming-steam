@@ -1,0 +1,21 @@
+LOW CONSUMING Steam - START HERE
+
+1. Right-click the downloaded ZIP, choose Extract All, and open the new folder.
+2. Double-click SteamTawop.exe.
+3. Save your work, finish games/downloads, and click Optimize Steam.
+
+The tool finds a supported Steam installation, checks its files, requests normal closure, saves a backup and applies changes. It reopens Steam if it was running. If it stays in the tray, use Exit Steam there and click the main button again.
+
+Undo changes restores verified originals. Keep the .tawop backup folder.
+Choose a different folder is only needed if detection needs help. Details explains failures.
+
+You do not need CMD, PowerShell or an account in this tool to open the release EXE.
+Developer files are included for review and rebuilding.
+
+These executables are unsigned. Windows or antivirus software may warn.
+This package does not disable protection. Source and SHA256 values support
+review and file-identity checks, not a safety certification.
+
+Experimental: memory savings and the combined 2 GB target remain unverified.
+Help: docs/USER_GUIDE.en.md
+Source and releases: https://github.com/TaWADAaaa/low-consuming-steam

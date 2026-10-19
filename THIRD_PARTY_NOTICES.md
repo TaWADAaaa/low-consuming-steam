@@ -1,16 +1,16 @@
-# Avisos de terceros
+# Third-party notices
 
-El código del kit, los temas, el preload agregado y los iconos Tawop fueron escritos para este proyecto. Los ejecutables del kit usan .NET Framework del sistema operativo; no se redistribuye ese runtime. El lector ASAR es una implementación propia del formato, no una copia de `@electron/asar`.
+Original patch-tool code, themes, added preload and geometric Tawop artwork were written for this project. Executables use the system .NET Framework, which is not redistributed. The ASAR reader is an original format implementation, not a copy of @electron/asar.
 
-Las pruebas JavaScript usan Node sólo como herramienta de desarrollo. Los ejecutables de uso final no incluyen Node, Electron ni los motores de los clientes. Los assets gráficos Tawop se crean con formas propias; el parche de Steam no añade un logo flotante o una imagen decorativa al fondo.
+Node is used only for development tests. Release executables do not include Node, Electron or client engines. The package does not contain Discord, Steam or Google Chrome executables, DLLs, bundles, CSS or images, nor a complete Chromium checkout.
 
-El paquete no incluye ejecutables, DLL, bundles, CSS ni imágenes de Discord, Steam o Google Chrome. Tampoco incluye el checkout completo de Chromium. Los parches se generan localmente usando la instalación/fuentes que seleccione quien ejecuta el kit. Los respaldos y archivos resultantes conservan la licencia del software de origen y no quedan cubiertos por MIT del kit.
+Patches are prepared locally from a selected installation or source checkout. Backups and resulting third-party files retain their original software licenses; this project's MIT license does not relicense them.
 
-- [Formato ASAR de Electron](https://github.com/electron/asar): documentación pública del formato de archivo utilizado.
-- [Fuses de Electron](https://www.electronjs.org/docs/latest/tutorial/fuses): comprobación de `EnableEmbeddedAsarIntegrityValidation`, sin alterar fuses.
-- [Términos de Discord](https://discord.com/terms): licencia del cliente y componentes; los archivos inspeccionados no constituyen una entrega de código abierto de Discord.
-- [Acuerdo de Steam](https://store.steampowered.com/subscriber_agreement/): licencia del cliente. Steam y sus marcas pertenecen a sus titulares.
-- [Chromium](https://www.chromium.org/), [licencia principal](https://chromium.googlesource.com/chromium/src/+/main/LICENSE), [marca](https://chromium.googlesource.com/chromium/src/+/main/chrome/app/theme/chromium/BRANDING) y [preferencias](https://chromium.googlesource.com/chromium/src/+/main/components/performance_manager/user_tuning/prefs.cc): base para el parche de fuentes.
-- [Compilar Chromium en Windows](https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md): las builds futuras necesitan sus avisos y licencias de terceros completos. La licencia principal no los sustituye.
+- [Electron ASAR](https://github.com/electron/asar): public format reference.
+- [Electron fuses](https://www.electronjs.org/docs/latest/tutorial/fuses): embedded ASAR integrity checks; fuses are not changed.
+- [Discord terms](https://discord.com/terms): original client terms and components.
+- [Steam agreement](https://store.steampowered.com/subscriber_agreement/): original client terms; Steam names belong to their owners.
+- [Chromium](https://www.chromium.org/) and [primary license](https://chromium.googlesource.com/chromium/src/+/main/LICENSE): source patch target.
+- [Chromium Windows build instructions](https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md): future derived browser builds need all applicable third-party notices, not only the primary license.
 
-Tawop es un proyecto independiente. Los nombres Discord, Steam y Chrome se usan para identificar los objetivos de los parches; no indican afiliación ni respaldo de sus titulares.
+Low Consuming / Tawop is independent. Product names identify patch targets and do not imply affiliation or endorsement.

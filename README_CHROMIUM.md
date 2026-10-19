@@ -1,46 +1,31 @@
-# ChromeTawop: parche de fuentes Chromium
+# Chromium source tool
 
-`ChromeTawop.exe` es el **parcheador de fuentes**, compilado desde `src/ChromeMod.cs` y el núcleo Tawop. No incluye un navegador compilado. Su entrada es la carpeta `src` de un checkout completo de Chromium; una instalación de Google Chrome no sirve como entrada.
+ChromeTawop.exe prepares supported Chromium source code. It is not a browser and does not patch installed Google Chrome. Select the src folder of a complete source checkout and use **Prepare Chromium sources**.
 
-## Cambios exactos
-
-| Archivo | Edición |
+| Source file | Change |
 |---|---|
-| `chrome/app/theme/chromium/BRANDING` | Producto e instalador `ChromeTawop`; conserva autores, copyright y campos ajenos. |
-| `components/performance_manager/user_tuning/prefs.cc` | Ahorro de memoria activado y agresividad alta como valores iniciales de esas dos preferencias. |
+| chrome/app/theme/chromium/BRANDING | Four product/installer names become ChromeTawop; unrelated fields remain. |
+| components/performance_manager/user_tuning/prefs.cc | Memory Saver enabled and aggressive for the two default registrations. |
 
-El parche exige claves y registros únicos. Si cambia la estructura o hay entradas ambiguas, se detiene. Repetirlo sobre fuentes ya modificadas no produce cambios nuevos. Se preservan UTF-8 con/sin BOM y los saltos de línea existentes. El núcleo Tawop prepara las ediciones, compara los archivos y conserva sus originales para restauración.
+Unique keys and registrations are required. Unknown or ambiguous structure stops the operation. UTF-8 BOM and existing line endings are preserved. The shared engine verifies files and keeps originals for undo. Existing user choices and managed policies still prevail in a future browser build. Aggressive memory saving may reload inactive tabs more often; it does not guarantee a smaller active tab.
 
-Estos valores se usan cuando el perfil no tiene una elección guardada o política administrada. La agresividad alta puede recargar más pestañas al volver; no reduce por sí misma la memoria de la pestaña activa. No se cambia la congelación de pestañas ya presente en la fuente inspeccionada. [Marca Chromium](https://chromium.googlesource.com/chromium/src/+/main/chrome/app/theme/chromium/BRANDING), [preferencias de rendimiento](https://chromium.googlesource.com/chromium/src/+/main/components/performance_manager/user_tuning/prefs.cc).
+## Native build for developers
 
-## Preparar la compilación
+scripts/Build-Chromium.ps1 requires an already synchronized checkout and dependencies with the patch applied. It does not fetch Chromium, install Visual Studio or download prerequisites. Follow the [official Windows instructions](https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md) for the selected revision.
 
-`scripts/Build-Chromium.ps1` requiere checkout y dependencias sincronizadas, con el parche ya aplicado. No ejecuta `fetch`, no instala Visual Studio ni descarga Chromium. Prepará la cadena de herramientas según la [guía oficial para Windows](https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md).
+The inspected baseline required Windows x64, Visual Studio 2026 >=18.0 with C++ x64 and ATL/MFC, Windows SDK 10.0.28000.2270, Debugging Tools >=10.0.26100.3323, Git and depot_tools. Requirements can change with the source revision. Chromium development needs substantial RAM and disk space; a checkout path must have no spaces. Build-machine requirements do not establish runtime memory performance.
 
-Requisitos consultados el 18 de octubre de 2026: Windows x64, Visual Studio 2026 ≥18.0 con desarrollo C++ y ATL/MFC, Windows SDK 10.0.28000.2270 y Debugging Tools ≥10.0.26100.3323, además de Git y depot_tools. Chromium pide al menos 8 GB de RAM, recomienda más de 16 y necesita al menos 100 GB libres en NTFS. La ruta del checkout no debe tener espacios. Estos son requisitos del equipo que compila; no validan el objetivo de consumo al ejecutar el navegador.
+~~~powershell
+powershell.exe -NoProfile -File .\scripts\Build-Chromium.ps1 -SourcePath C:\src\chromium\src -CheckOnly
+powershell.exe -NoProfile -File .\scripts\Build-Chromium.ps1 -SourcePath C:\src\chromium\src -PackagePath C:\releases\ChromeTawop-native
+~~~
 
-Con `git`, `gn` y `autoninja` preparados en PATH:
+CheckOnly diagnoses prerequisites without starting compilation. The full command builds the real chrome target under out\TawopBrowser, using optimized release settings without debug symbols. The internal browser executable remains chrome.exe; the patch tool ChromeTawop.exe is a separate program.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-Chromium.ps1 -SourcePath C:\src\chromium\src -CheckOnly
-```
+Packaging queries GN runtime_deps and copies existing dependencies while retaining layout. External paths and links are rejected. It includes Chromium's primary license and a manifest with source revision, patched hashes and validation status. An external dependency stops packaging while preserving the build for review.
 
-El diagnóstico no inicia una compilación ni crea sus archivos. Para compilar y preparar un candidato en una carpeta nueva:
+## Current state
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-Chromium.ps1 -SourcePath C:\src\chromium\src -PackagePath C:\releases\ChromeTawop-native
-```
+Synthetic tests cover the source edits and rejection cases. **A complete native Chromium build and browser startup test have not been completed.** No compiled browser is distributed in this release.
 
-## Qué genera el script
-
-Se compila el target real `chrome` en `out\TawopBrowser`, optimizado como release, sin componentes compartidos de desarrollo ni símbolos de depuración. Se mantiene el nombre interno `chrome.exe`, que Chromium utiliza en distintas partes del producto. La marca visible es ChromeTawop. El parcheador `ChromeTawop.exe` y ese navegador nativo son productos distintos.
-
-Para preparar el candidato se consulta `gn desc ... runtime_deps` y se copia cada dependencia existente conservando su estructura. Se rechazan rutas externas y enlaces del sistema. Se incorpora la licencia principal de Chromium y un manifiesto con revisión, hashes de las dos fuentes modificadas y estado de validación. Si GN devuelve una dependencia externa, se conserva el build y se detiene el empaquetado para revisión. [Cálculo de dependencias de GN](https://gn.googlesource.com/gn/+/main/docs/reference.md#runtime_deps-how-runtime-dependency-computation-works).
-
-## Estado y publicación del navegador
-
-Los tests sintéticos comprueban los cambios, repetición, campos ajenos, BOM/CRLF y rechazo de fuentes ambiguas. **No se ejecutó un build completo de Chromium ni una prueba del navegador nativo.** La auditoría de desarrollo no encontró la cadena C++ completa preparada.
-
-Antes de distribuir un navegador hay que compilarlo, abrirlo en una PC de prueba y verificar navegación, video, WebRTC, teclado, lectura de textos y restauración de pestañas. También faltan las mediciones conjuntas con Discord y Steam en cuatro núcleos y con 2 GiB disponibles. [Protocolo de rendimiento](docs/RENDIMIENTO.md).
-
-Una build derivada necesita los avisos de terceros aplicables a su revisión: la licencia principal por sí sola no sustituye todos los avisos de Chromium. Conservá revisión, fuentes/parches y manifiesto al publicarla. El ZIP del kit sólo entrega nuestro parcheador y fuentes propias; no se presenta como un navegador portable validado.
+Before distributing a browser, verify startup, navigation, video, WebRTC, keyboard access, readability, tab restoration and real resource use. Keep all third-party notices required by the selected revision; the primary license alone is not a substitute. Retain revision, source patches and the manifest. [Performance protocol](docs/RENDIMIENTO.md).
