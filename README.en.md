@@ -4,12 +4,12 @@ A small Windows tool with one main button. It finds a supported installation, ch
 
 **Experimental release.** This is a local optimization tool, not a replacement client. The combined 2 GiB memory target has not been demonstrated. Chrome's main button now configures an installed Google Chrome browser using four native performance policies.
 
-[Download](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.5.0-experimental) · [Beginner guide](docs/USER_GUIDE.en.md) · [Source code](https://github.com/TaWADAaaa/low-consuming-steam) · [Donations](DONATIONS.md) · [Privacy](PRIVACY.md)
+[Download](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.5.1-experimental) · [Beginner guide](docs/USER_GUIDE.en.md) · [Source code](https://github.com/TaWADAaaa/low-consuming-steam) · [Donations](DONATIONS.md) · [Privacy](PRIVACY.md)
 
 ## Start here
 
-1. Open the [v0.5.0 download page](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.5.0-experimental).
-2. Download **low-consuming-steam-v0.5.0-experimental.zip**. Right-click it and choose **Extract All**.
+1. Open the [v0.5.1 download page](https://github.com/TaWADAaaa/low-consuming-steam/releases/tag/v0.5.1-experimental).
+2. Download **low-consuming-steam-v0.5.1-experimental.zip**. Right-click it and choose **Extract All**.
 3. Open the extracted folder and double-click **SteamTawop.exe**. You do not need the CMD files, Node or a development tool.
 4. Save your work and finish calls, downloads or updates. Click the large button. After checks pass, it asks Discord or Steam to close, applies changes and reopens a client that was running. If it stays in the tray, use its Quit/Exit menu and retry.
 5. Wait for the result. To cancel, click **Stop**. If files were already changed, let the tool finish restoring them. **Undo changes** returns a completed installation to its verified originals.

@@ -6,7 +6,7 @@ Chrome's GUI action configures four allowed performance-policy DWORD values unde
 
 Original code does not implement sign-in, account token reading, telemetry or report uploads. Original clients keep their own connections and network behavior. Build tools and hosting services have their own policies.
 
-When no external assets folder is supplied, original embedded CSS and JavaScript are extracted under %LOCALAPPDATA%\TawopModKit\assets\0.5.0-<hash>. This contains project assets, not client profiles or account data.
+When no external assets folder is supplied, original embedded CSS and JavaScript are extracted under %LOCALAPPDATA%\TawopModKit\assets\0.5.0-<hash>. This resource bundle is shared by versions 0.5.0 and 0.5.1. It contains project assets, not client profiles or account data.
 
 The optional performance collector reads process names, CPU time, memory counters and hardware/Windows information and writes local CSV/JSON. It does not read window titles, URLs, browsing history or command lines. Inspection reports, errors and screenshots may include installation paths and system details.
 

@@ -1,4 +1,4 @@
-# Privacy audit: Low Consuming Tools v0.5.0
+# Privacy audit: Low Consuming Tools v0.5.1
 
 Prepared on October 19, 2026. The inspected scope is the three staged release folders for Discord, Steam and Chrome: 62 files per project, 186 files total, before adding this audit record.
 
@@ -6,7 +6,7 @@ Prepared on October 19, 2026. The inspected scope is the three staged release fo
 
 - An independent byte scan checked source and binary content as UTF-8 and UTF-16LE. No unexpected local profile path, Windows username, machine identifier, email address, recognizable access token, private key or real credential assignment was found. Public repository URLs and synthetic security-test URL values were reviewed as intentional test data.
 - Each file inventory matches the explicit packaging allowlist. There is one project executable per folder, with original project source, guides, tests and assets. No private runtime folders, upstream client archives, account profiles, backups, unexpected files or reparse links were found.
-- Each executable matches its SHA256 in the version 0.5.0 manifest. Each manifest records passing automated tests and exactly one selected product. The PE debug directories are empty, so no PDB path is embedded there.
+- Each executable matches its SHA256 in the version 0.5.1 manifest. Each manifest records passing automated tests and exactly one selected product. The PE debug directories are empty, so no PDB path is embedded there.
 - Staged source, test and asset bytes match the canonical source used for this revision. Build output, benchmark harnesses, raw measurements, screenshots and local antivirus logs remain outside the public package.
 - Public repository owner links are intentional. Each supplied BTC, SOL and USDT receiving address appears once in its project's DONATIONS.md with its requested network. These are authorized public receiving addresses, not private keys.
 - The source comment-line check found no explanatory inline comments. Functional directives and format-marker strings remain where needed.
