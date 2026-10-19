@@ -1,6 +1,6 @@
 # Chromium source tool
 
-ChromeTawop.exe prepares supported Chromium source code. It is not a browser and does not patch installed Google Chrome. Select the src folder of a complete source checkout and use **Prepare Chromium sources**.
+The advanced ChromeTawop.exe --inspect, --apply and --restore commands prepare supported Chromium source code. For example, ChromeTawop.exe --inspect C:\src\chromium\src examines a source checkout; --apply and --restore apply or undo its source patch. These source commands are separate from the GUI's Optimize Chrome action, which now configures four native performance policies in installed Google Chrome 126 or later. No rebuilt browser is included.
 
 | Source file | Change |
 |---|---|

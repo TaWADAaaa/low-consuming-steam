@@ -6,8 +6,13 @@ LOW CONSUMING Steam - START HERE
 
 The tool finds a supported Steam installation, checks its files, requests normal closure, saves a backup and applies changes. It reopens Steam if it was running. If it stays in the tray, use Exit Steam there and click the main button again.
 
-Undo changes restores verified originals. Keep the .tawop backup folder.
-Choose a different folder is only needed if detection needs help. Details explains failures.
+While busy, the main button becomes Stop. Click it once and wait for safe cancellation or recovery. Closing the window also requests Stop. Keep the .tawop backup folder.
+
+Aggressive tradeoffs: library community content, motion and decorative media are reduced using native low performance/bandwidth paths. Undo changes restores verified originals. Choose a different folder is only needed if detection needs help. Details explains failures.
+
+Need to stop? The main button changes to Stop while the tool is busy.
+Click it once and wait. Closing the window also requests a safe stop.
+If recovery is needed, let it finish before closing the tool.
 
 You do not need CMD, PowerShell or an account in this tool to open the release EXE.
 Developer files are included for review and rebuilding.
