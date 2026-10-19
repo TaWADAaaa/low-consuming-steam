@@ -74,6 +74,8 @@ if (-not $SkipTests) {
     if (-not $node) { throw 'Full preload validation requires Node.js on PATH. The release executables do not require Node.' }
     & $node.Source (Join-Path $packageRoot 'tests\Preload.Tests.js') $packageRoot
     if ($LASTEXITCODE -ne 0) { throw 'Preload media and style tests failed.' }
+    & $node.Source (Join-Path $packageRoot 'tests\AggressivePolicy.Tests.js')
+    if ($LASTEXITCODE -ne 0) { throw 'Aggressive application policy tests failed.' }
     $measurementTest = Join-Path $packageRoot 'tests\Measure.Tests.ps1'
     if (Test-Path -LiteralPath $measurementTest) {
         $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -86,7 +88,7 @@ $records = foreach ($app in $products) {
     [pscustomobject]@{Name=[IO.Path]::GetFileName($path);Bytes=(Get-Item -LiteralPath $path).Length;SHA256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash;Kind='local patch tool; not a replacement client'}
 }
 [pscustomobject]@{
-    Version = '0.4.0'
+    Version = '0.5.0'
     SelectedProduct = $selectedProduct
     BuiltUtc = [DateTime]::UtcNow.ToString('o')
     Compiler = (Get-Item -LiteralPath $compiler).VersionInfo.FileVersion

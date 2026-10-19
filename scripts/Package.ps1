@@ -20,7 +20,7 @@ function Assert-PlainPath([string]$Path) {
 
 Assert-PlainPath $packageRoot
 if (-not $OutputPath) {
-    $OutputPath = Join-Path (Split-Path $packageRoot -Parent) ($repository + '-v0.4.0-experimental.zip')
+    $OutputPath = Join-Path (Split-Path $packageRoot -Parent) ($repository + '-v0.5.0-experimental.zip')
 }
 $output = [IO.Path]::GetFullPath($OutputPath)
 Assert-PlainPath $output
@@ -32,7 +32,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw 'Run BUILD.cmd or scripts/Build.ps1 for this repository product first.'
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.Version -ne '0.4.0' -or $manifest.SelectedProduct -ne $product -or
+if ($manifest.Version -ne '0.5.0' -or $manifest.SelectedProduct -ne $product -or
     @($manifest.Executables).Count -ne 1 -or $manifest.Executables[0].Name -ne $executable) {
     throw 'The manifest must contain only this project executable.'
 }
@@ -58,6 +58,8 @@ $relativeFiles = @(
     'BUILD-MANIFEST.json'
     'CONTRIBUTING.md'
     'docs/ARQUITECTURA.md'
+    'docs/BASELINE.md'
+    'docs/PATCHER-BENCHMARK.md'
     'docs/RENDIMIENTO.md'
     'docs/USER_GUIDE.en.md'
     'docs/VALIDACION.md'
@@ -73,28 +75,36 @@ $relativeFiles = @(
     'scripts/Build-Chromium.ps1'
     'scripts/Measure-AppBudget.ps1'
     'scripts/Package.ps1'
+    'src/AggressivePolicy.cs'
     'src/app.manifest'
     'src/AsarArchive.cs'
     'src/AssetStore.cs'
     'src/AutoSetup.cs'
     'src/ChromeMod.cs'
+    'src/ChromeRuntimeProfile.cs'
     'src/DiscordMod.cs'
     'src/ModCore.cs'
+    'src/OperationControl.cs'
     'src/Program.cs'
     'src/SteamMod.cs'
     'START-HERE.txt'
     'SteamTawop.cmd'
     'SteamTawop.exe'
+    'tests/AggressivePolicy.Tests.cs'
+    'tests/AggressivePolicy.Tests.js'
     'tests/Asar.Tests.cs'
     'tests/AssetStore.Tests.cs'
     'tests/AutoSetup.Tests.cs'
+    'tests/Cancellation.Tests.cs'
     'tests/Chrome.Tests.cs'
+    'tests/ChromeRuntimeProfile.Tests.cs'
     'tests/Core.Tests.cs'
     'tests/GuiSmoke.cs'
     'tests/Measure.Tests.ps1'
     'tests/Preload.Tests.js'
     'tests/Review.Tests.cs'
     'tests/Runner.cs'
+    'tests/SharedFixtures.cs'
     'tests/Steam.Tests.cs'
     'THIRD_PARTY_NOTICES.md'
 )
