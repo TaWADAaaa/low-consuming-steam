@@ -1,0 +1,93 @@
+:root,
+.theme-dark,
+.theme-light {
+  --tawop-mod-version: "TAWOP_MOD_V3";
+  --tawop-accent: #54e694;
+  --brand-500: #237647;
+  --brand-560: #1c603a;
+  --brand-600: #174e30;
+  --background-primary: #111713;
+  --background-secondary: #0b100d;
+  --background-secondary-alt: #080d0a;
+  --background-tertiary: #070b08;
+  --background-floating: #111c15;
+  --background-base-low: #111713;
+  --background-base-lower: #0b100d;
+  --background-base-lowest: #070b08;
+  --background-surface-high: #17251c;
+  --background-surface-higher: #1b2d22;
+  --background-surface-highest: #22372a;
+  --text-normal: #e4f5eb;
+  --text-default: #e4f5eb;
+  --text-secondary: #c0d1c7;
+  --text-muted: #adbbb2;
+  --text-link: #86f2b5;
+  --text-brand: #86f2b5;
+  --header-primary: #e4f5eb;
+  --header-secondary: #c0d1c7;
+  --interactive-normal: #c0d1c7;
+  --interactive-hover: #e4f5eb;
+  --interactive-active: #e4f5eb;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.avatarDecoration__44b0c,
+.avatarDecoration_c19a55,
+.profileEffects__0dd08,
+.sparkles__67a11,
+.sparkles__74017,
+.rightSparkle_fc1723,
+.leftSparkle_fc1723,
+.buttonSparkleStar1_fc1723,
+.buttonSparkleStar2_fc1723,
+.buttonSparkleStar3_fc1723,
+.buttonSparkleStar4_fc1723,
+.buttonSparkleStar5_fc1723,
+.sparkleStar1__9f7e5,
+.sparkleStar2__9f7e5,
+.sparkleStar3__9f7e5 {
+  display: none !important;
+  background: transparent !important;
+}
+
+.base_afb27c {
+  background: transparent !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--tawop-accent, #54e694) !important;
+  outline-offset: 2px !important;
+}
+
+.focus-rings-ring {
+  border: 2px solid var(--tawop-accent, #54e694) !important;
+  box-sizing: border-box;
+}
+
+html:not([data-tawop="1"]) body {
+  background-color: #0b100d !important;
+}
+
+html[data-tawop="1"] {
+  accent-color: #54e694;
+}
+
+@media (forced-colors: active) {
+  :focus-visible,
+  .focus-rings-ring {
+    outline-color: Highlight !important;
+    border-color: Highlight !important;
+  }
+}
