@@ -37,13 +37,28 @@ namespace Tawop.Tests
                 File.WriteAllText(themePath, theme, utf8);
                 string changelist = Path.Combine(install, "steamui", "changelist.txt");
                 File.WriteAllText(changelist, "12345678\r\n", utf8);
+                SharedFixtures.WriteSteamBundle(install);
+                string nativeChunk = Path.Combine(install, "steamui", "chunk~1a2b.js");
+                File.WriteAllText(nativeChunk, SharedFixtures.SteamBundle, utf8);
+                string unrelatedChunk = Path.Combine(install, "steamui", "chunk~aa.js");
+                File.WriteAllText(unrelatedChunk, "window.unrelatedComponent = true;", utf8);
                 List<PatchEdit> edits = SteamMod.Prepare(install, assets);
-                Check(edits.Count == 2, "Only existing, supported CSS files with declarations must be edited.");
+                Check(edits.Count == 4, "Supported styles and both native settings stores must be edited.");
                 PatchEdit patched = null;
+                int engineEdits = 0;
                 foreach (PatchEdit edit in edits)
                 {
-                    Check(edit.RelativePath.StartsWith("steamui" + Path.DirectorySeparatorChar + "css" + Path.DirectorySeparatorChar, StringComparison.Ordinal), "Edits must remain under Steam UI CSS.");
                     string output = utf8.GetString(edit.Content);
+                    if (edit.RelativePath.EndsWith(".js", StringComparison.Ordinal))
+                    {
+                        engineEdits++;
+                        Check(output.Contains(AggressivePolicy.Marker), "Native settings stores must receive the engine policy.");
+                        Check(output.Contains("return tawopSteamClientSettings(this.m_ClientSettings)"), "Native UI settings must use the policy getter.");
+                        Check(edit.RelativePath.EndsWith("sp.js", StringComparison.Ordinal) || edit.RelativePath.EndsWith("chunk~1a2b.js", StringComparison.Ordinal), "Unrelated script chunks must be left unchanged.");
+                        continue;
+                    }
+
+                    Check(edit.RelativePath.StartsWith("steamui" + Path.DirectorySeparatorChar + "css" + Path.DirectorySeparatorChar, StringComparison.Ordinal), "Stylesheet edits must remain under Steam UI CSS.");
                     Check(output.EndsWith(theme + "\r\n", StringComparison.Ordinal), "The complete low-cost theme must be appended.");
                     Check(output.IndexOf("data:image", StringComparison.Ordinal) < 0, "The patch must not embed decorative image assets.");
                     string version = "--tawop-mod-version: \"TAWOP_MOD_V3\";";
@@ -56,6 +71,9 @@ namespace Tawop.Tests
                 }
 
                 Check(patched != null, "sp.css must be included.");
+                Check(engineEdits == 2, "Main and chunk settings stores must use the same policy.");
+                Check(File.ReadAllText(nativeChunk, utf8) == SharedFixtures.SteamBundle, "Preparation must not write native script files.");
+                Check(File.ReadAllText(unrelatedChunk, utf8) == "window.unrelatedComponent = true;", "Unrelated scripts must remain unchanged.");
                 for (int index = 0; index < original.Length; index++)
                 {
                     Check(patched.Content[index] == original[index], "Preparation must preserve all original bytes.");
@@ -88,6 +106,21 @@ namespace Tawop.Tests
                     SteamMod.Prepare(install, assets);
                 }, "Non-UTF-8 theme assets must fail closed.");
                 File.WriteAllText(themePath, theme, utf8);
+                File.WriteAllText(nativeChunk, SharedFixtures.SteamBundle.Replace("get clientSettings(){", "get unsupportedSettings(){"), utf8);
+                Check(SteamMod.Prepare(install, assets).Count == 3, "Chunks without a settings getter must remain untouched.");
+                File.WriteAllText(nativeChunk, SharedFixtures.SteamBundle + SharedFixtures.SteamBundle, utf8);
+                Expect<InvalidDataException>(delegate
+                {
+                    SteamMod.Prepare(install, assets);
+                }, "Ambiguous settings stores must fail closed before writing any resources.");
+                File.WriteAllText(nativeChunk, SharedFixtures.SteamBundle, utf8);
+                string mainScript = Path.Combine(install, "steamui", "sp.js");
+                File.WriteAllText(mainScript, "window.unsupportedSteam = true;", utf8);
+                Expect<InvalidDataException>(delegate
+                {
+                    SteamMod.Prepare(install, assets);
+                }, "The main native settings store is required; cosmetic-only success is not allowed.");
+                SharedFixtures.WriteSteamBundle(install);
                 File.WriteAllText(changelist, "12345 private data", utf8);
                 Expect<InvalidDataException>(delegate
                 {

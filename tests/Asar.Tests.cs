@@ -197,7 +197,7 @@ namespace Tawop.Tests
                 File.WriteAllText(Path.Combine(assets, "discord\\preload.js"), DiscordMod.PreloadMarker + "\n;(function(){var css=__TAWOP_STYLESHEET_JSON__;void css;}());", Utf8);
                 byte[] app = AsarArchive.Create(new Dictionary<string, byte[]> { { "splash/index.css", Utf8.GetBytes("body{color:white;}") }, { "untouched.bin", new byte[] { 0, 1, 255, 2 } } });
                 byte[] mainPreload = Utf8.GetBytes("/* synthetic original preload */\n");
-                byte[] coreArchive = AsarArchive.Create(new Dictionary<string, byte[]> { { "mainScreenPreload.js", mainPreload }, { "untouched.bin", new byte[] { 9, 0, 8, 255 } } });
+                byte[] coreArchive = AsarArchive.Create(new Dictionary<string, byte[]> { { "mainScreenPreload.js", mainPreload }, { "bundle.js", Utf8.GetBytes(SharedFixtures.DiscordBundle) }, { "untouched.bin", new byte[] { 9, 0, 8, 255 } } });
                 string appFile = Path.Combine(resources, "app.asar");
                 string coreFile = Path.Combine(core, "core.asar");
                 string exe = Path.Combine(install, "Discord.exe");
@@ -221,6 +221,7 @@ namespace Tawop.Tests
                     Assert(text.IndexOf("__TAWOP_STYLESHEET_JSON__", StringComparison.Ordinal) < 0, "Stylesheet placeholder is replaced");
                     if (isCore)
                     {
+                        Assert(Utf8.GetString(patched.GetFile("bundle.js")).IndexOf(AggressivePolicy.Marker, StringComparison.Ordinal) >= 0, "Discord native engine policy is staged in the archive");
                         Assert(text.StartsWith(Utf8.GetString(mainPreload), StringComparison.Ordinal), "Original preload is preserved verbatim");
                         AssertBytes(new byte[] { 9, 0, 8, 255 }, patched.GetFile("untouched.bin"), "Discord core payload preservation");
                     }

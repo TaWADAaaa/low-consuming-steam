@@ -187,6 +187,7 @@ namespace Tawop.Tests
         private static string SteamFixture(string root)
         {
             Directory.CreateDirectory(Path.Combine(root, "steamui", "css"));
+            SharedFixtures.WriteSteamBundle(root);
             File.WriteAllBytes(Path.Combine(root, "steam.exe"), new byte[] { 77, 90, 0, 0 });
             File.WriteAllText(Path.Combine(root, "steamui", "css", "sp.css"), "body { color: white; }\r\n", new UTF8Encoding(false));
             return root;

@@ -45,6 +45,7 @@ namespace Tawop.Tests
         private static void Fixture(string root)
         {
             Directory.CreateDirectory(Path.Combine(root, @"steamui\css"));
+            SharedFixtures.WriteSteamBundle(root);
             File.WriteAllText(Path.Combine(root, @"steamui\css\library.css"), "body { color: black; }\r\n", new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(root, @"steamui\css\sp.css"), ".box { transition: all 1s; }\n", new UTF8Encoding(false));
         }
@@ -60,7 +61,7 @@ namespace Tawop.Tests
             byte[] library = File.ReadAllBytes(Css(root, "library.css"));
             byte[] sp = File.ReadAllBytes(Css(root, "sp.css"));
             PatchInspection plan = ModCore.Inspect(Product.Steam, root, assets);
-            Assert(plan.Files.Count == 2 && !Directory.Exists(Path.Combine(root, ".tawop")), "Inspection mutated fixture.");
+            Assert(plan.Files.Count == 3 && !Directory.Exists(Path.Combine(root, ".tawop")), "Inspection mutated fixture.");
             PatchInspection applied = ModCore.Apply(Product.Steam, root, assets);
             Assert(applied.Status == "Applied" && ModCore.Hash(File.ReadAllBytes(Css(root, "library.css"))) != ModCore.Hash(library), "No actual CSS mutation.");
             Assert(ModCore.Inspect(Product.Steam, root, assets).Status == "Applied", "An active legacy-compatible journal must be displayed in English.");

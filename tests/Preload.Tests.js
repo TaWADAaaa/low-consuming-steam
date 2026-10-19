@@ -27,6 +27,10 @@ function video(properties = {}) {
     paused: false,
     pauses: 0,
     plays: 0,
+    decoration: false,
+    closest() {
+      return this.decoration ? {} : null;
+    },
     pause() {
       this.pauses++;
       this.paused = true;
@@ -147,6 +151,29 @@ test("hidden muted decorative loop pauses and resumes once", () => {
 test("hidden at install pauses only eligible loops", () => {
   const loop = video();
   harness([loop], { hidden: true });
+  assert.equal(loop.pauses, 1);
+});
+
+test("known decoration videos stop even while the window is visible", () => {
+  const decoration = video({ decoration: true });
+  const userVideo = video();
+  const environment = harness([decoration, userVideo]);
+  assert.equal(decoration.pauses, 1);
+  environment.document.dispatch("play", decoration);
+  assert.equal(decoration.pauses, 1);
+  assert.equal(userVideo.pauses, 0);
+  environment.visibility(true);
+  environment.visibility(false);
+  assert.equal(decoration.plays, 0);
+  assert.equal(userVideo.plays, 1);
+});
+
+test("late metadata pauses eligible hidden loops without polling", () => {
+  const loop = video({ duration: NaN });
+  const environment = harness([loop], { hidden: true });
+  assert.equal(loop.pauses, 0);
+  loop.duration = 4;
+  environment.document.dispatch("loadedmetadata", loop);
   assert.equal(loop.pauses, 1);
 });
 

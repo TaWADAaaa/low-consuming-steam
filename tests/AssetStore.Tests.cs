@@ -41,7 +41,7 @@ namespace Tawop.Tests
                 string extracted = first.Result;
                 Assert(extracted == second.Result, "Concurrent requests must use the same verified bundle.");
                 Assert(Paths.IsInside(cache, extracted), "Embedded resources must remain under the selected cache.");
-                Assert(Path.GetFileName(extracted).StartsWith("0.4.0-", StringComparison.Ordinal), "The cache must identify the bundle version and hash.");
+                Assert(Path.GetFileName(extracted).StartsWith("0.5.0-", StringComparison.Ordinal), "The cache must identify the bundle version and hash.");
                 foreach (string relative in paths)
                 {
                     string resourceName = "Tawop.Assets." + relative.Replace('/', '.');

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Windows.Forms;
 
 public static class GuiSmoke
@@ -26,7 +27,7 @@ public static class GuiSmoke
             Type programType = assembly.GetType("Tawop.Program", true);
             object product = programType.GetField("SelectedProduct", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
             string name = product.ToString();
-            using (Form form = (Form)Activator.CreateInstance(formType, new object[] { product }))
+            using (Form form = (Form)Activator.CreateInstance(formType, new object[] { product, false }))
             {
                 PropertyInfo selectedRoot = formType.GetProperty("SelectedRoot", PrivateInstance);
                 if (selectedRoot == null || !selectedRoot.CanWrite)
@@ -36,7 +37,7 @@ public static class GuiSmoke
 
                 string exampleRoot = name == "Discord"
                     ? @"C:\Users\Example\AppData\Local\Discord\app-1.2.3"
-                    : name == "Steam" ? @"C:\Program Files (x86)\Steam" : @"C:\Example\chromium\src";
+                    : name == "Steam" ? @"C:\Program Files (x86)\Steam" : @"C:\Program Files\Google\Chrome\Application";
                 selectedRoot.SetValue(form, exampleRoot, null);
                 form.ShowInTaskbar = false;
                 form.StartPosition = FormStartPosition.Manual;
@@ -51,9 +52,9 @@ public static class GuiSmoke
                 TextBox details = FindAccessible(controls, "Technical details") as TextBox;
                 LinkLabel detailLink = FindLink(controls, "Details");
                 Assert(primary.AccessibleName == "Start automatic setup", "The primary action needs an accessible name.");
-                Assert(primary.Text == (name == "Chrome" ? "Prepare Chromium sources" : "Optimize " + name), "The primary action must describe the selected product.");
+                Assert(primary.Text == "Optimize " + name, "The primary action must describe the selected product.");
                 Assert(form.Text == "Low Consuming " + name, "The window title must be in English.");
-                Assert(detection.Text == (name == "Chrome" ? "Chromium source folder selected." : name + " found. No folder setup needed."), "Automatic detection needs a simple English result.");
+                Assert(detection.Text == name + " found. No folder setup needed.", "Automatic detection needs a simple English result.");
                 Assert(details != null && details.ReadOnly && !details.Visible, "Technical details must be read-only and hidden initially.");
                 Assert(primary.Enabled, "The primary action must be ready after a folder is selected.");
                 foreach (Control control in controls)
@@ -94,7 +95,7 @@ public static class GuiSmoke
                 }
 
                 selectedRoot.SetValue(form, exampleRoot, null);
-                details.Text = "Version 0.4.0. Local, reversible patches. No account or password is needed.\r\n"
+                details.Text = "Version 0.5.0. Local, reversible patches. No account or password is needed.\r\n"
                     + "Resource savings still need measurement. No data is uploaded by this tool.";
                 SetSize(form, new Size(650, 510));
                 SaveScreenshot(form, args[1]);
@@ -120,13 +121,49 @@ public static class GuiSmoke
                 VerifyEnglishAndPrivacy(form);
             }
 
-            Console.WriteLine(name + " GUI: one action, English text, compact and expanded layouts, 1.5x layout simulation; rendered off-screen without applying changes.");
+            VerifyStop(formType, product);
+
+            Console.WriteLine(name + " GUI: one action, Stop and safe window close, English text, compact and expanded layouts, 1.5x layout simulation; no client files changed.");
             return 0;
         }
         catch (Exception error)
         {
             Console.Error.WriteLine(error);
             return 1;
+        }
+    }
+
+    private static void VerifyStop(Type formType, object product)
+    {
+        using (Form form = (Form)Activator.CreateInstance(formType, new object[] { product, false }))
+        {
+            string missing = Path.Combine(Path.GetTempPath(), "LowConsuming-Missing-" + Guid.NewGuid().ToString("N"));
+            formType.GetProperty("SelectedRoot", PrivateInstance).SetValue(form, missing, null);
+            form.ShowInTaskbar = false;
+            form.StartPosition = FormStartPosition.Manual;
+            form.Location = new Point(-32000, -32000);
+            form.Show();
+            Settle(form);
+            Button primary = FindSingleButton(Descendants(form));
+            formType.GetMethod("Begin", PrivateInstance).Invoke(form, new object[] { false });
+            CancellationTokenSource source = (CancellationTokenSource)formType.GetField("operationCancellation", PrivateInstance).GetValue(form);
+            CancellationToken token = source.Token;
+            Assert(primary.Enabled && primary.Text == "Stop", "The running operation must expose an enabled Stop action.");
+            Assert(primary.AccessibleName == "Stop the current operation", "The running action needs an accessible Stop name.");
+            primary.PerformClick();
+            Assert(token.IsCancellationRequested, "Stop must signal the operation's cancellation token.");
+            Assert(primary.Text == "Stopping safely..." && !primary.Enabled, "The tool must acknowledge the Stop request.");
+            form.Close();
+            Assert(!form.IsDisposed, "The X button must wait until the worker reaches a safe boundary.");
+            Assert((bool)formType.GetField("closeWhenFinished", PrivateInstance).GetValue(form), "The X button must request close after the worker stops.");
+            DateTime limit = DateTime.UtcNow.AddSeconds(5);
+            while (!form.IsDisposed && (bool)formType.GetField("busy", PrivateInstance).GetValue(form) && DateTime.UtcNow < limit)
+            {
+                Application.DoEvents();
+                Thread.Sleep(5);
+            }
+            Assert(form.IsDisposed || !(bool)formType.GetField("busy", PrivateInstance).GetValue(form), "A stopped worker must not leave the tool busy.");
+            if (!form.IsDisposed) { form.Close(); }
         }
     }
 
